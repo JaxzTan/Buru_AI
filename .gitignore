@@ -1,0 +1,8 @@
+.env
+/bin/
+/out/
+*.session
+coverage.out
+.DS_Store
+.idea/
+.vscode/

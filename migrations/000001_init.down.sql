@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS lookup_log;
+DROP TABLE IF EXISTS api_key;
+DROP TABLE IF EXISTS customer;
+DROP TABLE IF EXISTS chain_transfer;
+DROP TABLE IF EXISTS verification;
+DROP TABLE IF EXISTS entity_sighting;
+DROP TABLE IF EXISTS entity;
+DROP TABLE IF EXISTS message;
+DROP TABLE IF EXISTS conversation;
+DROP TABLE IF EXISTS honeypot_account;
+DROP TABLE IF EXISTS persona;
+DROP TABLE IF EXISTS operator;
