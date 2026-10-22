@@ -6,24 +6,43 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/JaxzTan/Buru_AI/internal/demostore"
+	"github.com/JaxzTan/Buru_AI/internal/engine"
 	"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
 	db    *sql.DB
 	redis *redis.Client
+	demo  *demostore.Store // optional: live demo data
+	eng   *engine.Engine
 }
 
 func New(db *sql.DB, rdb *redis.Client) *Server {
 	return &Server{db: db, redis: rdb}
 }
 
+// WithDemo enables the console + portal pages and their APIs, and starts the scripted scammer simulator
+// (set BURU_SIMULATE=0 to disable it).
+func (s *Server) WithDemo(st *demostore.Store) *Server {
+	s.demo = st
+	s.eng = engine.New(st)
+	if os.Getenv("BURU_SIMULATE") != "0" {
+		go s.eng.RunSimulator(context.Background())
+	}
+	return s
+}
+
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("GET /readyz", s.readyz)
+	if s.demo != nil {
+		s.registerDemo(mux)
+	}
 	return mux
 }
 

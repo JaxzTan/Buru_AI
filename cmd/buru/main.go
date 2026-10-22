@@ -19,6 +19,7 @@ import (
 	"go.temporal.io/sdk/worker"
 
 	"github.com/JaxzTan/Buru_AI/internal/config"
+	"github.com/JaxzTan/Buru_AI/internal/demostore"
 	"github.com/JaxzTan/Buru_AI/internal/server"
 	"github.com/JaxzTan/Buru_AI/internal/workflows"
 )
@@ -66,9 +67,14 @@ func run(log *slog.Logger) error {
 	}
 	defer w.Stop()
 
+	demo, err := demostore.New() // seeded data for the pitch demo
+	if err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           server.New(db, rdb).Routes(),
+		Handler:           server.New(db, rdb).WithDemo(demo).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
