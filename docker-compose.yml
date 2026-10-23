@@ -16,7 +16,10 @@ services:
 
   redis:
     image: redis:7.4-alpine
+    # AOF persistence: Telegram update state and peer access hashes (tg:*) must survive restarts.
+    command: ["redis-server", "--appendonly", "yes"]
     ports: ["6379:6379"]
+    volumes: [redis-data:/data]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -46,3 +49,4 @@ services:
 
 volumes:
   postgres-data:
+  redis-data:
