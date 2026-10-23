@@ -41,6 +41,7 @@ func (s *Server) StartGateway(ctx context.Context, cs ...gateway.Connector) erro
 		return err
 	}
 	s.gw = gw
+	s.eng.Out = gw // persona and operator replies leave through the connectors
 	return gw.Start(ctx)
 }
 

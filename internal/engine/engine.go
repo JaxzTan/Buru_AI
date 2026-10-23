@@ -5,6 +5,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"os"
 	"strconv"
@@ -16,15 +17,33 @@ import (
 	"github.com/JaxzTan/Buru_AI/internal/persona"
 )
 
+// Sender delivers persona and operator messages to the scammer's channel (gateway.Router implements it).
+type Sender interface {
+	Send(ctx context.Context, convoID, text string, human bool) error
+}
+
+type nopSender struct{}
+
+func (nopSender) Send(context.Context, string, string, bool) error { return nil }
+
 type Engine struct {
 	St                 *demostore.Store
 	LLM                *persona.Client
+	Out                Sender
 	DelayMin, DelayMax time.Duration
 }
 
 func New(st *demostore.Store) *Engine {
 	// PRD FR-3 requires >=10s in production; the demo default is shorter so the pitch moves.
-	return &Engine{St: st, LLM: persona.FromEnv(), DelayMin: secs("BURU_DELAY_MIN", 4), DelayMax: secs("BURU_DELAY_MAX", 9)}
+	return &Engine{St: st, LLM: persona.FromEnv(), Out: nopSender{}, DelayMin: secs("BURU_DELAY_MIN", 4), DelayMax: secs("BURU_DELAY_MAX", 9)}
+}
+
+// send pushes a message out after it is in the store. Failures are logged, not fatal: the console still shows
+// the message, and seeded demo conversations have no channel peer at all.
+func (e *Engine) send(id, text string, human bool) {
+	if err := e.Out.Send(context.Background(), id, text, human); err != nil {
+		slog.Warn("engine: send failed", "convo", id, "human", human, "err", err)
+	}
 }
 
 func secs(key string, def int) time.Duration {
@@ -94,12 +113,17 @@ func (e *Engine) reply(id string) {
 		return // operator took over or closed while we were "typing" (FR-5)
 	}
 	text := e.compose(c)
+	sent := false
 	e.St.UpdateConvo(id, func(c *demostore.Convo) {
 		if c.Status == "bot" {
 			c.Msgs = append(c.Msgs, demostore.Msg{Dir: "out", Time: hhmm(), Text: text})
 			c.Time = hhmm()
+			sent = true
 		}
 	})
+	if sent {
+		e.send(id, text, false)
+	}
 }
 
 func (e *Engine) compose(c demostore.Convo) string {
@@ -152,10 +176,12 @@ func stageLine(pbs []demostore.Row, scam, stage string) (goal, example string) {
 
 // Operator sends a message as the persona (only meaningful once the operator has taken over).
 func (e *Engine) Operator(id, text string) {
-	e.St.UpdateConvo(id, func(c *demostore.Convo) {
+	if _, ok := e.St.UpdateConvo(id, func(c *demostore.Convo) {
 		c.Msgs = append(c.Msgs, demostore.Msg{Dir: "out", Time: hhmm(), Text: text, Human: true})
 		c.Time = hhmm()
-	})
+	}); ok {
+		e.send(id, text, true) // TR-5: operator messages go out through the same gateway
+	}
 }
 
 // Takeover toggles bot/human control. It takes effect immediately: reply() re-checks status before sending.
