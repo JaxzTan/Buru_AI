@@ -276,6 +276,6 @@ This section tracks where the code still differs from this TRD. Delete each row 
 
 | # | Gap | Current code | Target | Done when |
 |---|---|---|---|---|
-| G-4 | sqlc | No `db/` query folder, no `sqlc.yaml` | `sqlc.yaml` + `db/queries`; CI runs `sqlc diff` and `sqlc vet` | Repositories use generated code |
+| G-4 | sqlc | `sqlc.yaml`, `db/queries` and generated `internal/db` exist; CI runs `sqlc diff` and `sqlc vet`. The app still serves from in-memory `internal/demostore` | Handlers call `internal/db` | Repositories use generated code |
 | G-5 | Confidence type | `internal/extraction/extract.go` emits a float (0.75–0.9) | Persisted as `confidence_level` enum: score < 0.8 → `low`, ≥ 0.8 → `medium`; only operator verification sets `high` | Mapping in place with unit tests |
 | G-6 | Schema diagram | `db/schema.dbml` hand-copied from design | Regenerated from real migrations with `db2dbml` | File matches applied migrations |
