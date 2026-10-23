@@ -5,11 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/JaxzTan/Buru_AI/internal/demostore"
 	"github.com/JaxzTan/Buru_AI/internal/engine"
+	"github.com/JaxzTan/Buru_AI/internal/gateway"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -19,21 +19,29 @@ type Server struct {
 	redis *redis.Client
 	demo  *demostore.Store // optional: live demo data
 	eng   *engine.Engine
+	gw    *gateway.Router
 }
 
 func New(db *pgxpool.Pool, rdb *redis.Client) *Server {
 	return &Server{db: db, redis: rdb}
 }
 
-// WithDemo enables the console + portal APIs, and starts the scripted scammer simulator
-// (set BURU_SIMULATE=0 to disable it).
+// WithDemo enables the console + portal APIs on the in-memory store.
 func (s *Server) WithDemo(st *demostore.Store) *Server {
 	s.demo = st
 	s.eng = engine.New(st)
-	if os.Getenv("BURU_SIMULATE") != "0" {
-		go s.eng.RunSimulator(context.Background())
-	}
 	return s
+}
+
+// StartGateway routes inbound messages from the connectors into the demo engine (TR-2).
+// Call after WithDemo; the connectors run until ctx is cancelled.
+func (s *Server) StartGateway(ctx context.Context, cs ...gateway.Connector) error {
+	gw, err := gateway.NewRouter(s.demo, s.eng, cs...)
+	if err != nil {
+		return err
+	}
+	s.gw = gw
+	return gw.Start(ctx)
 }
 
 func (s *Server) Routes() http.Handler {
@@ -43,6 +51,13 @@ func (s *Server) Routes() http.Handler {
 	if s.demo != nil {
 		s.registerDemo(mux)
 	}
+	mux.HandleFunc("GET /internal/gateway/health", func(w http.ResponseWriter, r *http.Request) {
+		if s.gw == nil {
+			writeJSON(w, http.StatusOK, []gateway.AccountHealth{})
+			return
+		}
+		writeJSON(w, http.StatusOK, s.gw.Health(r.Context()))
+	})
 	return mux
 }
 

@@ -19,6 +19,8 @@ import (
 
 	"github.com/JaxzTan/Buru_AI/internal/config"
 	"github.com/JaxzTan/Buru_AI/internal/demostore"
+	"github.com/JaxzTan/Buru_AI/internal/gateway"
+	"github.com/JaxzTan/Buru_AI/internal/gateway/fake"
 	"github.com/JaxzTan/Buru_AI/internal/server"
 	"github.com/JaxzTan/Buru_AI/internal/workflows"
 )
@@ -71,9 +73,18 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
+	api := server.New(db, rdb).WithDemo(demo)
+	var conns []gateway.Connector
+	if os.Getenv("BURU_SIMULATE") != "0" {
+		conns = append(conns, fake.New(demo))
+	}
+	if err := api.StartGateway(ctx, conns...); err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           server.New(db, rdb).WithDemo(demo).Routes(),
+		Handler:           api.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
