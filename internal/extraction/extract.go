@@ -108,7 +108,78 @@ var rules = []struct {
 	{"investment", []string{"invest", "usdt", "profit", "weekly", "crypto", "returns", "trading"}},
 	{"impersonation", []string{"police", "pdrm", "bank negara", "bnm", "court", "macau", "lhdn", "mahkamah"}},
 	{"romance", []string{"darling", "my love", "sayang", "lonely", "visit you", "gift box"}},
+	{"loan", []string{"loan", "pinjaman", "ah long", "low interest", "processing fee", "approval fee", "approved amount", "blacklist ok"}},
 }
+
+// Labels lists every scam-type label in the order of the scam_type enum (FR-7, PRD v0.2).
+var Labels = []string{"job", "investment", "romance", "parcel", "impersonation", "loan", "other"}
+
+// IsLabel reports whether s is a valid scam-type label.
+func IsLabel(s string) bool {
+	for _, l := range Labels {
+		if l == s {
+			return true
+		}
+	}
+	return false
+}
+
+// Level maps an extractor score to the stored confidence level (TRD §12 G-5): score < 0.8 → low,
+// ≥ 0.8 → medium. Extraction can never produce "high"; only an operator verification sets it (FR-9).
+func Level(score float64) string {
+	if score >= 0.8 {
+		return "medium"
+	}
+	return "low"
+}
+
+// BankOrChain converts a Found.Bank value to what is stored in entities.bank_or_chain: bank codes
+// as-is (MBB, CIMB...), chains as the chain enum spelling (tron, ethereum). Empty means NULL.
+func BankOrChain(typ, bank string) string {
+	if typ == "wallet" {
+		switch strings.ToUpper(bank) {
+		case "TRON", "TRX", "TRC20":
+			return "tron"
+		case "ETH", "ETHEREUM", "ERC20":
+			return "ethereum"
+		}
+	}
+	return strings.ToUpper(strings.TrimSpace(bank))
+}
+
+// NormalizeValue normalises a value the same way Extract does, so lookups (POST /v1/lookup)
+// hit the deduped entity. ok is false when the value is not valid for the type.
+func NormalizeValue(typ, value string) (normalized string, ok bool) {
+	v := strings.TrimSpace(value)
+	switch typ {
+	case "bank_account":
+		d := digits(v)
+		return d, len(d) >= 8 && len(d) <= 18
+	case "phone":
+		d := digits(v)
+		if strings.HasPrefix(d, "0") {
+			d = "60" + d[1:]
+		}
+		return "+" + d, len(d) >= 11 && len(d) <= 12 && strings.HasPrefix(d, "601")
+	case "wallet":
+		if reEth.MatchString(v) && len(v) == 42 {
+			return strings.ToLower(v), true
+		}
+		return v, validTron(v)
+	case "url":
+		n := normURL(strings.TrimRight(v, ".,;)"))
+		return n, n != "" && strings.Contains(n, ".")
+	case "handle":
+		h := strings.ToLower(strings.TrimPrefix(v, "@"))
+		if strings.HasPrefix(h, "tg:") {
+			return h, len(h) > 3
+		}
+		return "@" + h, reHandle.MatchString(h)
+	}
+	return "", false
+}
+
+var reHandle = regexp.MustCompile(`^[a-z][a-z0-9_]{3,31}$`)
 
 // Classify labels a conversation by keyword score (FR-7). Production: LLM classifier on a summary (TR-7).
 func Classify(text string) string {
