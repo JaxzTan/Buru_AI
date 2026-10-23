@@ -44,6 +44,7 @@ docker compose exec temporal temporal workflow execute \
 | `internal/intel` | Entity store, dedupe, verification (TR-9) |
 | `internal/customerapi` | Lookup API, API keys, webhooks (TR-10, TR-12, TR-13) |
 | `db/migrations` | PostgreSQL schema (golang-migrate) |
+| `db/queries` | sqlc query files; `make sqlc` generates `internal/db` |
 | `web` | Next.js dashboard: `/operator` console, `/portal` customer portal. `/api/*` proxies to the Go API |
 
 ## Commands
