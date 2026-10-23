@@ -1,5 +1,5 @@
 // Package demostore is the in-memory data layer for the pitch: seeded from seed.json, then mutated live
-// by the extraction engine, operators and lookups. Swap for MySQL (migrations/) + Redis cache (TR-10) later.
+// by the extraction engine, operators and lookups. Swap for PostgreSQL (db/migrations, sqlc) + Redis cache (TR-10) later.
 package demostore
 
 import (

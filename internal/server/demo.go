@@ -14,15 +14,10 @@ func decode(r *http.Request, v any) bool { return json.NewDecoder(r.Body).Decode
 
 func bad(w http.ResponseWriter, msg string) { writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg}) }
 
-// registerDemo mounts the two UIs and the API they call. Customer API: /v1/*. Operator API: /internal/*.
+// registerDemo mounts the API the Next.js UIs (web/) call. Customer API: /v1/*. Operator API: /internal/*.
 func (s *Server) registerDemo(mux *http.ServeMux) {
 	st, eng := s.demo, s.eng
 	ok := func(w http.ResponseWriter) { writeJSON(w, 200, map[string]bool{"ok": true}) }
-
-	// --- pages ---
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/console", http.StatusFound) })
-	mux.HandleFunc("GET /console", page("pages/console.html"))
-	mux.HandleFunc("GET /portal", page("pages/portal.html"))
 
 	// --- customer API (DaaS) ---
 	mux.HandleFunc("POST /v1/lookup", func(w http.ResponseWriter, r *http.Request) {

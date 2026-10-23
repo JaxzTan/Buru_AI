@@ -1,17 +1,16 @@
-# Local environment (docs/TRD.md §8): MySQL, Redis, Temporal dev server, Buru app.
+# Local environment (docs/TRD_V3.md §8): PostgreSQL, Redis, Temporal dev server, Buru app.
 # `make up` starts dependencies only; `docker compose --profile app up` also runs the app container.
 services:
-  mysql:
-    image: mysql:8.4
+  postgres:
+    image: postgres:16-alpine
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: buru
-      MYSQL_USER: buru
-      MYSQL_PASSWORD: buru
-    ports: ["3307:3306"]
-    volumes: [mysql-data:/var/lib/mysql]
+      POSTGRES_DB: buru
+      POSTGRES_USER: buru
+      POSTGRES_PASSWORD: buru
+    ports: ["5432:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      test: ["CMD", "pg_isready", "-U", "buru", "-d", "buru"]
       interval: 5s
       retries: 20
 
@@ -36,14 +35,14 @@ services:
     build: .
     env_file: .env
     environment:
-      BURU_MYSQL_DSN: buru:buru@tcp(mysql:3306)/buru?parseTime=true
+      BURU_POSTGRES_URL: postgres://buru:buru@postgres:5432/buru?sslmode=disable
       BURU_REDIS_ADDR: redis:6379
       BURU_TEMPORAL_HOSTPORT: temporal:7233
     ports: ["8080:8080"]
     depends_on:
-      mysql: { condition: service_healthy }
+      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       temporal: { condition: service_started }
 
 volumes:
-  mysql-data:
+  postgres-data:

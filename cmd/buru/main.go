@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -12,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.temporal.io/sdk/client"
 	tlog "go.temporal.io/sdk/log"
@@ -41,7 +40,7 @@ func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	db, err := sql.Open("mysql", cfg.MySQLDSN)
+	db, err := pgxpool.New(ctx, cfg.PostgresURL)
 	if err != nil {
 		return err
 	}

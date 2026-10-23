@@ -3,7 +3,6 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -11,21 +10,22 @@ import (
 
 	"github.com/JaxzTan/Buru_AI/internal/demostore"
 	"github.com/JaxzTan/Buru_AI/internal/engine"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
 type Server struct {
-	db    *sql.DB
+	db    *pgxpool.Pool
 	redis *redis.Client
 	demo  *demostore.Store // optional: live demo data
 	eng   *engine.Engine
 }
 
-func New(db *sql.DB, rdb *redis.Client) *Server {
+func New(db *pgxpool.Pool, rdb *redis.Client) *Server {
 	return &Server{db: db, redis: rdb}
 }
 
-// WithDemo enables the console + portal pages and their APIs, and starts the scripted scammer simulator
+// WithDemo enables the console + portal APIs, and starts the scripted scammer simulator
 // (set BURU_SIMULATE=0 to disable it).
 func (s *Server) WithDemo(st *demostore.Store) *Server {
 	s.demo = st
@@ -56,10 +56,10 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	checks := map[string]string{"mysql": "ok", "redis": "ok"}
+	checks := map[string]string{"postgres": "ok", "redis": "ok"}
 	status := http.StatusOK
-	if err := s.db.PingContext(ctx); err != nil {
-		checks["mysql"] = err.Error()
+	if err := s.db.Ping(ctx); err != nil {
+		checks["postgres"] = err.Error()
 		status = http.StatusServiceUnavailable
 	}
 	if err := s.redis.Ping(ctx).Err(); err != nil {

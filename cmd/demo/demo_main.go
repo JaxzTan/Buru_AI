@@ -1,5 +1,5 @@
 // Command demo runs only the pitch-demo API on the in-memory seed.
-// No MySQL, Redis, Temporal or Docker needed:  go run ./cmd/demo
+// No PostgreSQL, Redis, Temporal or Docker needed:  go run ./cmd/demo
 package main
 
 import (
