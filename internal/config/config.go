@@ -14,6 +14,7 @@ type Config struct {
 	TemporalHostPort  string
 	TemporalNamespace string
 	TemporalTaskQueue string
+	TelegramStore     string // memory | redis: where Telegram update state and peer access hashes live
 }
 
 func Load() (Config, error) {
@@ -25,6 +26,7 @@ func Load() (Config, error) {
 		TemporalHostPort:  getenv("BURU_TEMPORAL_HOSTPORT", "localhost:7233"),
 		TemporalNamespace: getenv("BURU_TEMPORAL_NAMESPACE", "default"),
 		TemporalTaskQueue: getenv("BURU_TEMPORAL_TASK_QUEUE", "buru-main"),
+		TelegramStore:     getenv("BURU_TG_STORE", "memory"),
 	}
 	if c.PostgresURL == "" {
 		return c, fmt.Errorf("BURU_POSTGRES_URL is required")
