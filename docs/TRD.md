@@ -4,9 +4,17 @@
 |---|---|
 | Author | Jaxz Tan |
 | Status | Draft |
-| Version | 0.1 |
-| Last updated | 21 Oct 2026 |
+| Version | 0.3 |
+| Last updated | 23 Oct 2026 |
 | Related PRD | [PRD.md](PRD.md) |
+
+**Revision history**
+
+| Version | Date | Changes |
+|---|---|---|
+| 0.1 | 21 Oct 2026 | First draft. |
+| 0.2 | 23 Oct 2026 | Database moved from MySQL 8 to PostgreSQL 15+; data access via sqlc + pgx; migrations via golang-migrate. Data model synced with schema (added operators, prompt versions, playbooks, customer users, webhook deliveries; plural table names; persona statuses). |
+| 0.3 | 23 Oct 2026 | Fixed §2/§7 contradiction on query builders; §4 now points to `db/schema.dbml` as a generated diagram; added §12 implementation gaps. |
 
 ## 1. Overview & scope
 
@@ -33,7 +41,7 @@ flowchart TB
   TMP[Temporal<br/>conversation workflows]
   LLM[LLM API]
   CH[TronGrid / Etherscan]
-  DB[(MySQL)]
+  DB[(PostgreSQL)]
   RD[(Redis)]
   DASH[Dashboard<br/>operator + customer]
 
@@ -64,7 +72,9 @@ flowchart TB
 | Customer API + webhooks | Lookup API, API-key auth, rate limiting, webhook delivery. |
 | Dashboard | Operator console (personas, live chats, verification) + customer portal (search, trends, keys). |
 
-**Deployment:** Docker Compose on a VPS in Singapore or Malaysia for MVP; managed MySQL; Temporal Cloud or self-hosted Temporal. Move to Kubernetes only after M4.
+**Data access:** All SQL comes from sqlc-generated queries, or a parameterised builder for dynamic filters (§7).
+
+**Deployment:** Docker Compose on a VPS in Singapore or Malaysia for MVP; managed PostgreSQL; Temporal Cloud or self-hosted Temporal. Move to Kubernetes only after M4.
 
 ## 3. Tech stack & rationale
 
@@ -72,32 +82,70 @@ flowchart TB
 |---|---|---|---|
 | Backend | Go | Known stack; strong concurrency for thousands of conversations. | Node.js |
 | Workflow orchestration | Temporal | Durable timers and state for long, delayed, pausable conversations. | Cron + DB state machine |
-| Database | MySQL 8 | Known stack; relational fits entities, relations, audit trail. | PostgreSQL |
+| Database | PostgreSQL 15+ | `jsonb` for persona/playbook/watch-rule config; native enums; `UNIQUE NULLS NOT DISTINCT` for entity dedupe; per-table grants to enforce append-only audit tables. | MySQL 8 |
+| Data access | sqlc + pgx | Type-safe Go generated from plain SQL; every query parameterised (no string-built SQL); full control over hot lookup queries. | GORM, ent, Prisma (Go client archived Jul 2025) |
+| Migrations | golang-migrate | Versioned up/down SQL files; same folder is sqlc's schema source. | Atlas |
 | Cache | Redis | Lookup API hot cache; rate limiting. | In-memory only |
 | Queue | Temporal task queues (MVP); Kafka later | Avoid extra infra until volume justifies it. | Kafka from day one |
 | LLM | Claude API — larger model for personas, smaller model for extraction | Strong multilingual + code-switching; structured output for extraction. | Self-hosted open model |
 | Telegram | gotd/td (Go MTProto client) | User accounts behave like real people, unlike bots. | Bot API (scammers ignore bots) |
 | WhatsApp | whatsmeow (Go) | Only practical Go option for personal accounts. | Official Business API (not suitable for personas) |
 | Chain data | TronGrid + Etherscan APIs | USDT on TRON is dominant in SEA scams. | Paid analytics provider |
-| Frontend | Next.js + Tailwind | Fast to build dashboard. | Plain React |
+| Frontend | Next.js + Tailwind | Fast to build dashboard. Talks only to the Go API, never directly to the database. | Plain React |
 | Auth | Operator: email + TOTP; Customer: API keys + dashboard login | Simple, adequate for B2B MVP. | Auth0 |
 | Hosting | Docker on VPS (SG/MY region) | Cheap, low latency to SEA customers. | AWS ap-southeast-1 |
 
 ## 4. Data model
 
+PostgreSQL 15+. All timestamps are `timestamptz` (UTC). Migrations under `db/migrations` are the source of truth; `db/schema.dbml` is a diagram of them for viewing in dbdiagram.io. After changing migrations, regenerate it instead of editing it by hand:
+
+```bash
+npx @dbml/cli db2dbml postgres "$DATABASE_URL" -o db/schema.dbml
+```
+
+**Operators, personas and accounts**
+
 | Entity | Key fields | Relations / notes |
 |---|---|---|
-| `persona` | id, name, age, language_mix, backstory, wealth_profile, playbook_ids, status | 1 → many `honeypot_account` |
-| `honeypot_account` | id, channel (telegram/whatsapp), phone, session_ref, status (active/banned/cooldown) | belongs to `persona` |
-| `conversation` | id, account_id, scammer_handle, scam_type, stage, status (bot/human/closed), started_at | 1 → many `message`; Temporal workflow id |
-| `message` | id, conversation_id, direction, body (encrypted), sent_at | **Append-only** |
-| `entity` | id, type (bank_account/wallet/phone/url/handle), value_normalized, bank_or_chain, confidence, status (unverified/verified/rejected), first_seen, last_seen | many ↔ many `conversation` via `entity_sighting` |
-| `entity_sighting` | entity_id, conversation_id, message_id, extracted_at | **Append-only** — audit trail (NFR-8) |
-| `verification` | entity_id, operator_id, decision, note, decided_at | **Append-only** |
-| `chain_transfer` | id, from_wallet, to_wallet, chain, token, amount, tx_hash, ts, to_label | linked to wallet `entity` |
-| `customer` | id, name, type (bank/ewallet/exchange), webhook_url, watch_rules | 1 → many `api_key` |
-| `api_key` | id, customer_id, key_hash, status, created_at | |
-| `lookup_log` | customer_id, entity_type, matched, latency_ms, ts | Usage + billing (FR-13) |
+| `operators` | id, email, role (operator/admin), totp_secret_ref, created_at | Referenced by prompt versions, messages, verifications |
+| `personas` | id, name, age, language_mix (jsonb), backstory, wealth_profile (jsonb), status (draft/active/paused/retired) | 1 → many `honeypot_accounts`; many ↔ many `playbooks` |
+| `persona_prompt_versions` | id, persona_id, version, system_prompt, created_by, created_at | Unique (persona_id, version) — TR-1 |
+| `playbooks` | id, scam_type, name, version, stages (jsonb) | Stage machine per scam type — TR-4 |
+| `persona_playbooks` | persona_id, playbook_id | Join table |
+| `honeypot_accounts` | id, persona_id, channel (telegram/whatsapp), phone, session_ref, status (active/banned/cooldown), banned_at, cooldown_until | belongs to `personas` — TR-17 |
+
+**Conversations**
+
+| Entity | Key fields | Relations / notes |
+|---|---|---|
+| `conversations` | id, account_id, playbook_id, temporal_workflow_id, scammer_handle, scam_type, stage, status (bot/human/closed), started_at, last_message_at, closed_at | 1 → many `messages` |
+| `messages` | id, conversation_id, direction, sender_type (scammer/persona/operator), operator_id, body_ciphertext (bytea), dek_ref, sent_at | **Append-only**. Envelope-encrypted — TR-14 |
+
+**Intelligence**
+
+| Entity | Key fields | Relations / notes |
+|---|---|---|
+| `entities` | id, type (bank_account/wallet/phone/url/handle), value_normalized, bank_or_chain, confidence (low/medium/high), status (unverified/verified/rejected), sightings_count, first_seen, last_seen | Unique (type, value_normalized, bank_or_chain) `NULLS NOT DISTINCT`. many ↔ many `conversations` via `entity_sightings` |
+| `entity_sightings` | id, entity_id, conversation_id, message_id, extracted_at | **Append-only** — audit trail (NFR-8). Unique (entity_id, message_id) |
+| `verifications` | id, entity_id, operator_id, decision (verified/rejected), note, decided_at | **Append-only** |
+| `chain_transfers` | id, wallet_entity_id, chain (tron/ethereum), token, tx_hash, log_index, from_wallet, to_wallet, amount (numeric 38,18), hop, to_label, ts | Unique (chain, tx_hash, log_index, wallet_entity_id) |
+
+**Customers**
+
+| Entity | Key fields | Relations / notes |
+|---|---|---|
+| `customers` | id, name, type (bank/ewallet/exchange), webhook_url, webhook_secret_ref, watch_rules (jsonb) | 1 → many `api_keys`, `customer_users` |
+| `customer_users` | id, customer_id, email, password_hash | Dashboard login |
+| `api_keys` | id, customer_id, key_prefix, key_hash, status (active/revoked), rate_limit_per_min, created_at, revoked_at | |
+| `lookup_logs` | id, customer_id, api_key_id, entity_type, matched, latency_ms, ts | Usage + billing (FR-13). Does not store the looked-up value |
+| `webhook_deliveries` | id, customer_id, entity_id, event_type, payload (jsonb), status (pending/delivered/failed), attempts, last_response_code, created_at, delivered_at | Delivery log — TR-12 |
+
+**Design notes**
+
+- `sightings_count` is denormalised on `entities` so the lookup API never counts sightings at request time.
+- `entities.confidence` is an enum. Extractor scores alone can reach at most `medium`; only an operator verification sets `high` (see §10, false positives, and G-5 in §12).
+- Secrets (session files, TOTP secrets, webhook secrets) are stored only as `*_ref` pointers to the secret store.
+- Redis cache and Temporal workflow state live outside PostgreSQL; `conversations.temporal_workflow_id` links them.
 
 ## 5. API design
 
@@ -137,19 +185,19 @@ flowchart TB
 
 | ID | Requirement | Implements | Notes |
 |---|---|---|---|
-| TR-1 | Persona config schema with language mix, backstory, wealth profile; injected into system prompt with conversation history. | FR-1, NFR-6 | Store prompts versioned. |
+| TR-1 | Persona config schema with language mix, backstory, wealth profile; injected into system prompt with conversation history. | FR-1, NFR-6 | Prompts versioned in `persona_prompt_versions`. |
 | TR-2 | Channel connectors for Telegram (MTProto) and WhatsApp, normalised by gateway; route by account → persona. | FR-2 | Session secrets in secret store. |
 | TR-3 | Temporal workflow per conversation with randomised reply delay (min 10 s), typing simulation and inactivity timeout. | FR-3, NFR-2 | Durable timers survive restarts. |
 | TR-4 | Scam playbooks as stage machines (rapport → bait → payment request → stall); stage stored on conversation. | FR-4 | Playbook per scam type. |
 | TR-5 | Takeover signal to workflow halts bot replies instantly; operator messages sent via same gateway. | FR-5 | Temporal signals. |
-| TR-6 | Extraction pipeline: LLM structured output + validators (bank account length per bank, TRON/ETH address checksum, URL normalisation); dedupe on normalised value. | FR-6 | Runs on every inbound message. |
+| TR-6 | Extraction pipeline: LLM structured output + validators (bank account length per bank, TRON/ETH address checksum, URL normalisation); dedupe on normalised value. | FR-6 | Runs on every inbound message. Dedupe via unique index on `entities`. |
 | TR-7 | Scam-type classifier on conversation summary; re-run at each stage change. | FR-7 | |
 | TR-8 | Chain tracer job: fetch USDT transfers for wallet, follow 2 hops, label known exchange deposit addresses. | FR-8 | Rate-limit external APIs. |
-| TR-9 | Verification queue in dashboard; status changes logged to append-only `verification`. | FR-9, NFR-8 | |
-| TR-10 | Lookup API backed by Redis cache of verified entities (normalised keys); MySQL fallback. | FR-10, NFR-1 | Target p95 < 300 ms. |
-| TR-11 | Dashboard entity list with filters, trend chart, CSV export. | FR-11 | |
-| TR-12 | Webhook dispatcher with HMAC signatures, retries with backoff, delivery log; triggered on verification matching watch rules. | FR-12, NFR-3 | Temporal activity. |
-| TR-13 | API key issuance (show once, store hash), revocation, per-key rate limits, `lookup_log` usage counts. | FR-13, NFR-3 | |
+| TR-9 | Verification queue in dashboard; status changes logged to append-only `verifications`. | FR-9, NFR-8 | |
+| TR-10 | Lookup API backed by Redis cache of verified entities (normalised keys); PostgreSQL fallback. | FR-10, NFR-1 | Target p95 < 300 ms. |
+| TR-11 | Dashboard entity list with filters, trend chart, CSV export. | FR-11 | Optional filters via sqlc nullable params or a parameterised builder. |
+| TR-12 | Webhook dispatcher with HMAC signatures, retries with backoff, delivery log in `webhook_deliveries`; triggered on verification matching watch rules. | FR-12, NFR-3 | Temporal activity. |
+| TR-13 | API key issuance (show once, store hash), revocation, per-key rate limits, `lookup_logs` usage counts. | FR-13, NFR-3 | |
 | TR-14 | Encrypt message bodies at rest (envelope encryption); redact non-essential personal data in customer outputs. | NFR-4 | |
 | TR-15 | Load test: 1,000 concurrent conversation workflows; 100 req/s lookup. | NFR-1, NFR-2 | k6 + Temporal metrics. |
 | TR-16 | Health checks, uptime monitoring, alerting on API errors and account bans. | NFR-7 | |
@@ -160,7 +208,8 @@ flowchart TB
 
 - **Auth:** operators use email + TOTP with role-based access (operator, admin); customers use hashed API keys over TLS plus dashboard login.
 - **Secrets:** channel session files, LLM keys and chain API keys kept in a secret manager (or encrypted env on VPS for MVP), never in the repo.
-- **Input validation:** all customer inputs validated and normalised; scammer messages are treated as untrusted. Prompt-injection guardrails stop scammer text from changing persona instructions or leaking system details.
+- **Input validation:** all customer inputs validated and normalised; scammer messages are treated as untrusted. Prompt-injection guardrails stop scammer text from changing persona instructions or leaking system details. All database access goes through sqlc-generated parameterised queries, or a parameterised builder (e.g. squirrel) for dynamic dashboard filters; string-built SQL is not allowed.
+- **Append-only enforcement:** the application's database role has INSERT and SELECT only on `messages`, `entity_sightings` and `verifications`; no UPDATE or DELETE.
 - **Rate limiting:** per API key in Redis; webhook endpoints signed with HMAC.
 - **Data stored:** conversations, scammer identifiers, mule account numbers, wallets. Encrypted at rest; retention 24 months for entities, 12 months for raw messages (to confirm with legal).
 - **Custody:** Unknown never holds, sends or receives funds. Personas never actually transfer money. This keeps the product outside payment and crypto-asset licensing scope.
@@ -171,11 +220,12 @@ flowchart TB
 
 | Environment | Setup |
 |---|---|
-| Local | Docker Compose: Go app, MySQL, Redis, Temporal dev server; LLM calls mocked or live with low limits. |
+| Local | Docker Compose: Go app, PostgreSQL, Redis, Temporal dev server; LLM calls mocked or live with low limits. |
 | Staging | VPS mirror of prod with test honeypot accounts and a sandbox customer. |
-| Prod | Docker on VPS (SG/MY), managed MySQL, Redis, Temporal Cloud. |
+| Prod | Docker on VPS (SG/MY), managed PostgreSQL, Redis, Temporal Cloud. |
 
-- **CI/CD:** GitHub Actions — lint, test, build image, deploy to staging on merge; manual promote to prod.
+- **Repo layout (data):** `db/migrations` (golang-migrate up/down files, also sqlc's schema source), `db/queries` (sqlc query files), `db/schema.dbml` (generated diagram), `sqlc.yaml` (engine `postgresql`, `sql_package: pgx/v5`).
+- **CI/CD:** GitHub Actions — lint, test, `sqlc diff` (generated code up to date), `sqlc vet`, migrations up/down check, build image, deploy to staging on merge; manual promote to prod.
 - **Observability:** structured logs (JSON), Prometheus metrics + Grafana, Sentry for errors. Key dashboards: lookup latency, conversations by stage, extraction rate, account ban rate, LLM cost per conversation.
 
 ## 9. Testing strategy
@@ -186,6 +236,7 @@ flowchart TB
 | Persona quality | Golden-conversation evals: replay scam scripts, score realism and stage progression | Custom eval harness + LLM grader |
 | Prompt injection | Adversarial scammer messages must not break persona | Eval suite |
 | Workflows | Temporal test environment for delays, takeover, timeouts | Temporal Go SDK testsuite |
+| Database queries | Integration tests against real PostgreSQL; migrations applied fresh per run | testcontainers-go + golang-migrate |
 | Lookup API | Integration tests + load test (p95 < 300 ms @ 100 req/s) | k6 |
 | Dashboard | E2E for verify flow and API key flow | Playwright |
 | Webhooks | Delivery, retry, signature verification tests | Go `testing` + mock server |
@@ -205,7 +256,7 @@ flowchart TB
 
 | Order | Work | Size | Milestone |
 |---|---|---|---|
-| 1 | Repo, Docker Compose, MySQL schema, Temporal setup | S | M1 |
+| 1 | Repo, Docker Compose, PostgreSQL migrations, sqlc setup, Temporal setup | S | M1 |
 | 2 | Telegram connector + gateway (TR-2) | M | M1 |
 | 3 | Persona engine + conversation workflow with delays (TR-1, TR-3) | L | M1 |
 | 4 | Playbooks + takeover (TR-4, TR-5) | M | M2 |
@@ -218,3 +269,13 @@ flowchart TB
 
 **Critical path:** 2 → 3 → 4 → 5 → 7. Without convincing personas producing real entities, there is nothing to sell.
 **Parallelisable:** the dashboard (6, 9) and chain tracer (9) can be built by a second person once the data model is fixed. The legal review (TR-18) should start in parallel with M2, not after.
+
+## 12. Open implementation gaps (doc ahead of code)
+
+This section tracks where the code still differs from this TRD. Delete each row once it is done.
+
+| # | Gap | Current code | Target | Done when |
+|---|---|---|---|---|
+| G-4 | sqlc | No `db/` query folder, no `sqlc.yaml` | `sqlc.yaml` + `db/queries`; CI runs `sqlc diff` and `sqlc vet` | Repositories use generated code |
+| G-5 | Confidence type | `internal/extraction/extract.go` emits a float (0.75–0.9) | Persisted as `confidence_level` enum: score < 0.8 → `low`, ≥ 0.8 → `medium`; only operator verification sets `high` | Mapping in place with unit tests |
+| G-6 | Schema diagram | `db/schema.dbml` hand-copied from design | Regenerated from real migrations with `db2dbml` | File matches applied migrations |
