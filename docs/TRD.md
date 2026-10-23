@@ -1,4 +1,4 @@
-# TRD: Unknown — Scam Intelligence Network for Southeast Asia
+# TRD: Buru AI — Scam Intelligence Network for Southeast Asia
 
 | Field | Value |
 |---|---|
@@ -18,7 +18,7 @@
 
 ## 1. Overview & scope
 
-Unknown is a Go backend that runs multilingual AI personas on honeypot messaging accounts, extracts scam entities (bank accounts, wallets, phone numbers, URLs) from conversations, traces crypto wallets on-chain, and serves verified intelligence to banks, e-wallets and exchanges through a low-latency lookup API, webhooks and a dashboard. This TRD covers all PRD Must and Should requirements (FR-1 to FR-13, NFR-1 to NFR-8). FR-14 (evidence reports), voice, and telco call diversion are deferred.
+Buru AI is a Go backend that runs multilingual AI personas on honeypot messaging accounts, extracts scam entities (bank accounts, wallets, phone numbers, URLs) from conversations, traces crypto wallets on-chain, and serves verified intelligence to banks, e-wallets and exchanges through a low-latency lookup API, webhooks and a dashboard. This TRD covers all PRD Must and Should requirements (FR-1 to FR-13, NFR-1 to NFR-8). FR-14 (evidence reports), voice, and telco call diversion are deferred.
 
 ## 2. Architecture
 
@@ -30,7 +30,7 @@ flowchart TB
     TG[Telegram connector<br/>MTProto user accounts]
     WA[WhatsApp connector]
   end
-  subgraph Core["Unknown core (Go monolith)"]
+  subgraph Core["Buru AI core (Go monolith)"]
     GW[Channel gateway]
     PE[Persona engine]
     EX[Extraction + classification]
@@ -212,7 +212,7 @@ npx @dbml/cli db2dbml postgres "$DATABASE_URL" -o db/schema.dbml
 - **Append-only enforcement:** the application's database role has INSERT and SELECT only on `messages`, `entity_sightings` and `verifications`; no UPDATE or DELETE.
 - **Rate limiting:** per API key in Redis; webhook endpoints signed with HMAC.
 - **Data stored:** conversations, scammer identifiers, mule account numbers, wallets. Encrypted at rest; retention 24 months for entities, 12 months for raw messages (to confirm with legal).
-- **Custody:** Unknown never holds, sends or receives funds. Personas never actually transfer money. This keeps the product outside payment and crypto-asset licensing scope.
+- **Custody:** Buru AI never holds, sends or receives funds. Personas never actually transfer money. This keeps the product outside payment and crypto-asset licensing scope.
 - **Regulatory posture:** customers are BNM/SC-regulated, so expect vendor due-diligence (security questionnaire, data processing agreement). PDPA 2010 applies to personal data handled. Get a legal opinion on honeypot account operation and data sharing before the first pilot (TR-18).
 - **Platform terms:** operating persona accounts on Telegram/WhatsApp likely breaches their terms of service; this is a business risk (see Risks), not a licensing issue.
 
