@@ -1,0 +1,711 @@
+{
+ "entities": [
+  {
+   "id": 1,
+   "type": "bank_account",
+   "bank": "MBB",
+   "value": "562103841192",
+   "display": "5621 0384 1192",
+   "scam_type": "job",
+   "confidence": 0.94,
+   "sightings": 7,
+   "last_seen": "22 Oct, 08:41",
+   "first_seen": "2 Sep 2026",
+   "status": "unverified",
+   "convo": "c1"
+  },
+  {
+   "id": 2,
+   "type": "wallet",
+   "bank": "TRON",
+   "value": "TQ7vR2mXc8kLpW4nYb6sHd3fJ9eA1u9xKp",
+   "display": "TQ7vR2…A1u9xKp",
+   "scam_type": "investment",
+   "confidence": 0.88,
+   "sightings": 3,
+   "last_seen": "22 Oct, 07:02",
+   "first_seen": "30 Sep 2026",
+   "status": "unverified",
+   "convo": "c2"
+  },
+  {
+   "id": 3,
+   "type": "phone",
+   "value": "+60 11-2345 6789",
+   "scam_type": "impersonation",
+   "confidence": 0.81,
+   "sightings": 2,
+   "last_seen": "22 Oct, 06:15",
+   "first_seen": "18 Oct 2026",
+   "status": "unverified",
+   "convo": "c3"
+  },
+  {
+   "id": 4,
+   "type": "url",
+   "value": "poslaju-track.my-parcel.top",
+   "scam_type": "parcel",
+   "confidence": 0.61,
+   "sightings": 1,
+   "last_seen": "21 Oct, 19:30",
+   "first_seen": "21 Oct 2026",
+   "status": "unverified",
+   "convo": "c4"
+  },
+  {
+   "id": 5,
+   "type": "bank_account",
+   "bank": "CIMB",
+   "value": "800712334561",
+   "display": "8007 1233 4561",
+   "scam_type": "investment",
+   "confidence": 0.97,
+   "sightings": 12,
+   "last_seen": "21 Oct, 16:02",
+   "first_seen": "14 Aug 2026",
+   "status": "verified",
+   "convo": "c2"
+  },
+  {
+   "id": 6,
+   "type": "handle",
+   "value": "@hr_shopee_parttime",
+   "scam_type": "job",
+   "confidence": 0.99,
+   "sightings": 9,
+   "last_seen": "22 Oct, 08:38",
+   "first_seen": "2 Sep 2026",
+   "status": "verified",
+   "convo": "c1"
+  },
+  {
+   "id": 7,
+   "type": "bank_account",
+   "bank": "MBB",
+   "value": "114022018837",
+   "display": "1140 2201 8837",
+   "scam_type": "parcel",
+   "confidence": 0.9,
+   "sightings": 4,
+   "last_seen": "20 Oct, 11:20",
+   "first_seen": "7 Oct 2026",
+   "status": "verified",
+   "convo": "c4"
+  },
+  {
+   "id": 8,
+   "type": "wallet",
+   "bank": "TRON",
+   "value": "TBA6uY1fQe3nZr8LkJm2sWc5Xp9vHd4kP2r",
+   "display": "TBA6uY…Hd4kP2r",
+   "scam_type": "romance",
+   "confidence": 0.92,
+   "sightings": 5,
+   "last_seen": "19 Oct, 23:48",
+   "first_seen": "1 Oct 2026",
+   "status": "verified",
+   "convo": "c5"
+  },
+  {
+   "id": 9,
+   "type": "phone",
+   "value": "+60 17-882 1043",
+   "scam_type": "job",
+   "confidence": 0.55,
+   "sightings": 1,
+   "last_seen": "18 Oct, 14:10",
+   "first_seen": "18 Oct 2026",
+   "status": "rejected",
+   "convo": "c1"
+  },
+  {
+   "id": 10,
+   "type": "bank_account",
+   "bank": "RHB",
+   "value": "21418800092311",
+   "display": "2141 8800 0923 11",
+   "scam_type": "impersonation",
+   "confidence": 0.95,
+   "sightings": 6,
+   "last_seen": "17 Oct, 10:05",
+   "first_seen": "22 Sep 2026",
+   "status": "verified",
+   "convo": "c3"
+  },
+  {
+   "id": 11,
+   "type": "url",
+   "value": "bnm-semakan.akaun-sah.com",
+   "scam_type": "impersonation",
+   "confidence": 0.93,
+   "sightings": 3,
+   "last_seen": "16 Oct, 09:12",
+   "first_seen": "10 Oct 2026",
+   "status": "verified",
+   "convo": "c3"
+  },
+  {
+   "id": 12,
+   "type": "wallet",
+   "bank": "ETH",
+   "value": "0x8f3a21c4b7e9d0a1f2c3b4a5e6d7c8b9a0f1e2d3",
+   "display": "0x8f3a…f1e2d3",
+   "scam_type": "investment",
+   "confidence": 0.86,
+   "sightings": 2,
+   "last_seen": "15 Oct, 21:33",
+   "first_seen": "12 Oct 2026",
+   "status": "verified",
+   "convo": "c2"
+  }
+ ],
+ "personas": [
+  {
+   "id": "p1",
+   "name": "Auntie Mei",
+   "age": 62,
+   "backstory": "Retired, Penang. Widowed, has FD savings, slow typist, asks her nephew about apps.",
+   "languages": [
+    "Hokkien",
+    "English",
+    "Manglish"
+   ],
+   "wealth": "Savings ~RM180k",
+   "playbooks": [
+    "investment",
+    "romance",
+    "impersonation"
+   ]
+  },
+  {
+   "id": "p2",
+   "name": "Ah Seng",
+   "age": 24,
+   "backstory": "Fresh grad in Klang, job hunting, bilingual BM–Mandarin, short on rent this month.",
+   "languages": [
+    "BM",
+    "Mandarin",
+    "Manglish"
+   ],
+   "wealth": "Low, eager for income",
+   "playbooks": [
+    "job"
+   ]
+  },
+  {
+   "id": "p3",
+   "name": "Kak Ros",
+   "age": 47,
+   "backstory": "Kuantan, runs a small kuih business on Shopee, orders parcels often.",
+   "languages": [
+    "BM",
+    "English"
+   ],
+   "wealth": "Small business owner",
+   "playbooks": [
+    "parcel",
+    "job"
+   ]
+  },
+  {
+   "id": "p4",
+   "name": "Uncle Wong",
+   "age": 68,
+   "backstory": "Ipoh, retired contractor, Cantonese first, worried about his EPF and police calls.",
+   "languages": [
+    "Cantonese",
+    "English"
+   ],
+   "wealth": "EPF + property",
+   "playbooks": [
+    "impersonation",
+    "investment"
+   ]
+  }
+ ],
+ "accounts": [
+  {
+   "id": "a1",
+   "channel": "TG",
+   "handle": "@mei_auntie62",
+   "persona": "p1",
+   "status": "active",
+   "chats": 9,
+   "last": "2 min ago",
+   "age": "41 days"
+  },
+  {
+   "id": "a2",
+   "channel": "WA",
+   "handle": "+60 12-••• 4410",
+   "persona": "p1",
+   "status": "cooldown",
+   "chats": 5,
+   "last": "3 h ago",
+   "age": "18 days"
+  },
+  {
+   "id": "a3",
+   "channel": "TG",
+   "handle": "@seng_jobs_kl",
+   "persona": "p2",
+   "status": "banned",
+   "chats": 0,
+   "last": "2 days ago",
+   "age": "12 days"
+  },
+  {
+   "id": "a4",
+   "channel": "TG",
+   "handle": "@ahseng.wk",
+   "persona": "p2",
+   "status": "active",
+   "chats": 9,
+   "last": "5 min ago",
+   "age": "6 days"
+  },
+  {
+   "id": "a5",
+   "channel": "TG",
+   "handle": "@ros_kuih_ktn",
+   "persona": "p3",
+   "status": "active",
+   "chats": 4,
+   "last": "12 min ago",
+   "age": "29 days"
+  },
+  {
+   "id": "a6",
+   "channel": "WA",
+   "handle": "+60 13-••• 7781",
+   "persona": "p3",
+   "status": "active",
+   "chats": 3,
+   "last": "1 h ago",
+   "age": "22 days"
+  },
+  {
+   "id": "a7",
+   "channel": "TG",
+   "handle": "@wong_ipoh68",
+   "persona": "p4",
+   "status": "active",
+   "chats": 2,
+   "last": "40 min ago",
+   "age": "9 days"
+  },
+  {
+   "id": "a8",
+   "channel": "WA",
+   "handle": "+60 16-••• 0932",
+   "persona": "p4",
+   "status": "banned",
+   "chats": 0,
+   "last": "5 days ago",
+   "age": "33 days"
+  }
+ ],
+ "convos": [
+  {
+   "id": "c1",
+   "scammer": "@hr_shopee_parttime",
+   "persona": "p1",
+   "channel": "TG",
+   "scam": "job",
+   "stage": "payment request",
+   "status": "bot",
+   "time": "08:38",
+   "stuck": true,
+   "msgs": [
+    {
+     "dir": "in",
+     "time": "08:31",
+     "text": "Hi Auntie, our company need part-time reviewer, RM300 per day only click like 👍"
+    },
+    {
+     "dir": "out",
+     "time": "08:33",
+     "text": "wah really ah? i retired already can do from home?"
+    },
+    {
+     "dir": "in",
+     "time": "08:34",
+     "text": "Yes can! First task need deposit RM150 to activate account, after that we return RM450"
+    },
+    {
+     "dir": "out",
+     "time": "08:37",
+     "text": "ok la i try.. which account ah? i use maybank app"
+    },
+    {
+     "dir": "in",
+     "time": "08:38",
+     "text": "Transfer to Maybank 5621 0384 1192 name LIM WEI ENTERPRISE",
+     "entities": [
+      "5621 0384 1192"
+     ]
+    },
+    {
+     "dir": "system",
+     "text": "Entity extracted · bank account · 94%"
+    }
+   ]
+  },
+  {
+   "id": "c2",
+   "scammer": "@cryptomentor_amy",
+   "persona": "p1",
+   "channel": "TG",
+   "scam": "investment",
+   "stage": "payment request",
+   "status": "human",
+   "time": "07:02",
+   "msgs": [
+    {
+     "dir": "in",
+     "time": "06:40",
+     "text": "Good morning Mei 🌸 our USDT plan give 8% weekly, my student already withdraw 3 times"
+    },
+    {
+     "dir": "out",
+     "time": "06:52",
+     "text": "my nephew say crypto dangerous leh.. how i know is real"
+    },
+    {
+     "dir": "in",
+     "time": "06:55",
+     "text": "I send you screenshot. Start small 500 USDT, send to TQ7vR2mXc8kLpW4nYb6sHd3fJ9eA1u9xKp TRC20 only",
+     "entities": [
+      "TQ7vR2mXc8kLpW4nYb6sHd3fJ9eA1u9xKp"
+     ]
+    },
+    {
+     "dir": "system",
+     "text": "Entity extracted · wallet · 88%"
+    },
+    {
+     "dir": "system",
+     "text": "Operator took over"
+    },
+    {
+     "dir": "out",
+     "time": "07:02",
+     "text": "TRC20 is what ah? can i pay from bank instead",
+     "human": true
+    }
+   ]
+  },
+  {
+   "id": "c3",
+   "scammer": "+60 11-2345 6789",
+   "persona": "p4",
+   "channel": "TG",
+   "scam": "impersonation",
+   "stage": "bait",
+   "status": "bot",
+   "time": "06:15",
+   "msgs": [
+    {
+     "dir": "in",
+     "time": "06:02",
+     "text": "Encik Wong, ini Pegawai Polis Bukit Aman. Akaun anda terlibat kes pengubahan wang haram.",
+     "entities": []
+    },
+    {
+     "dir": "out",
+     "time": "06:09",
+     "text": "aiyo what? i never do anything wrong. who are you"
+    },
+    {
+     "dir": "in",
+     "time": "06:15",
+     "text": "Sila semak di bnm-semakan.akaun-sah.com dan jangan beritahu sesiapa",
+     "entities": [
+      "bnm-semakan.akaun-sah.com"
+     ]
+    },
+    {
+     "dir": "system",
+     "text": "Entity extracted · URL · 93%"
+    }
+   ]
+  },
+  {
+   "id": "c4",
+   "scammer": "@poslaju_support_my",
+   "persona": "p3",
+   "channel": "TG",
+   "scam": "parcel",
+   "stage": "stall",
+   "status": "bot",
+   "time": "Yest.",
+   "msgs": [
+    {
+     "dir": "in",
+     "time": "19:20",
+     "text": "Parcel anda tertahan di kastam. Bayar RM12.90 di poslaju-track.my-parcel.top/pay",
+     "entities": [
+      "poslaju-track.my-parcel.top"
+     ]
+    },
+    {
+     "dir": "out",
+     "time": "19:26",
+     "text": "parcel apa ni? saya ada order kuih mould dari china"
+    },
+    {
+     "dir": "in",
+     "time": "19:30",
+     "text": "Ya betul. Kalau link tak boleh, transfer Maybank 1140 2201 8837",
+     "entities": [
+      "1140 2201 8837"
+     ]
+    },
+    {
+     "dir": "out",
+     "time": "19:41",
+     "text": "kejap ya saya tengah masak, nanti malam saya transfer"
+    }
+   ]
+  },
+  {
+   "id": "c5",
+   "scammer": "@david_engineer_sg",
+   "persona": "p1",
+   "channel": "WA",
+   "scam": "romance",
+   "stage": "rapport",
+   "status": "bot",
+   "time": "Yest.",
+   "msgs": [
+    {
+     "dir": "in",
+     "time": "22:10",
+     "text": "Good evening dear, you remind me of my late wife. I am engineer on oil rig now"
+    },
+    {
+     "dir": "out",
+     "time": "22:31",
+     "text": "so sorry to hear. my husband also passed 3 years ago"
+    }
+   ]
+  },
+  {
+   "id": "c6",
+   "scammer": "@kerja_online_2u",
+   "persona": "p2",
+   "channel": "TG",
+   "scam": "job",
+   "stage": "rapport",
+   "status": "closed",
+   "time": "20 Oct",
+   "msgs": [
+    {
+     "dir": "in",
+     "time": "14:00",
+     "text": "Nak kerja online? RM200 sehari"
+    },
+    {
+     "dir": "out",
+     "time": "14:04",
+     "text": "boleh, kerja apa?"
+    },
+    {
+     "dir": "system",
+     "text": "Scammer went silent · closed after 48 h"
+    }
+   ]
+  }
+ ],
+ "playbooks": [
+  {
+   "id": "job",
+   "reach": [
+    100,
+    82,
+    51,
+    33
+   ],
+   "stages": [
+    [
+     "Rapport",
+     "Show eagerness for side income; mention a money worry.",
+     "wah really can earn from phone? i need extra for rent"
+    ],
+    [
+     "Bait",
+     "Complete the first \"free\" task; accept the small payout.",
+     "ok i like already, they say i get RM30 right?"
+    ],
+    [
+     "Payment request",
+     "When asked to top up, ask which account and confirm the name.",
+     "ok la i try.. which account ah? name what?"
+    ],
+    [
+     "Stall",
+     "Delay with plausible excuses to draw a second account.",
+     "bank say cannot transfer to this one, got other account?"
+    ]
+   ]
+  },
+  {
+   "id": "investment",
+   "reach": [
+    100,
+    74,
+    46,
+    29
+   ],
+   "stages": [
+    [
+     "Rapport",
+     "Be curious but cautious; mention savings sitting idle.",
+     "my FD only give 2.5%, my friend say crypto better"
+    ],
+    [
+     "Bait",
+     "Ask for proof of returns; let them send screenshots.",
+     "you got show other people withdraw or not?"
+    ],
+    [
+     "Payment request",
+     "Ask for the wallet and network, or a bank alternative.",
+     "TRC20 is what ah? can i pay from bank instead"
+    ],
+    [
+     "Stall",
+     "Claim the exchange blocked it; ask for a different wallet.",
+     "the app say address cannot use, you got another one?"
+    ]
+   ]
+  },
+  {
+   "id": "parcel",
+   "reach": [
+    100,
+    88,
+    62,
+    40
+   ],
+   "stages": [
+    [
+     "Rapport",
+     "Confirm you order things online often.",
+     "parcel apa ni? saya ada order dari china"
+    ],
+    [
+     "Bait",
+     "Try the link, report that it \"failed\".",
+     "link tu tak boleh buka la, error"
+    ],
+    [
+     "Payment request",
+     "Ask to pay by transfer instead of link.",
+     "boleh saya transfer terus? akaun mana?"
+    ],
+    [
+     "Stall",
+     "Delay payment to collect alternate accounts.",
+     "kejap ya saya tengah masak, nanti malam saya transfer"
+    ]
+   ]
+  },
+  {
+   "id": "impersonation",
+   "reach": [
+    100,
+    69,
+    38,
+    22
+   ],
+   "stages": [
+    [
+     "Rapport",
+     "React with worry; ask who is calling.",
+     "aiyo what? i never do anything wrong. who are you"
+    ],
+    [
+     "Bait",
+     "Comply slowly with \"verification\" steps.",
+     "ok i check the website, what i need to key in?"
+    ],
+    [
+     "Payment request",
+     "Ask for the \"safe account\" details twice.",
+     "you say transfer to safe account, which bank ah?"
+    ],
+    [
+     "Stall",
+     "Say the bank flagged it; ask for another account.",
+     "bank officer ask me why, i scared, got other account?"
+    ]
+   ]
+  },
+  {
+   "id": "romance",
+   "reach": [
+    100,
+    58,
+    21,
+    12
+   ],
+   "stages": [
+    [
+     "Rapport",
+     "Share light personal details; be warm.",
+     "so sorry to hear. my husband also passed 3 years ago"
+    ],
+    [
+     "Bait",
+     "Accept gifts or the story of a parcel for you.",
+     "you so kind, really send me gift?"
+    ],
+    [
+     "Payment request",
+     "When asked for fees, ask for the exact account.",
+     "customs fee ah? ok which account i bank in"
+    ],
+    [
+     "Stall",
+     "Hesitate citing family; ask for another way to pay.",
+     "my daughter see my bank, can pay other account?"
+    ]
+   ]
+  }
+ ],
+ "weeks": [
+  {
+   "k": "1 Sep",
+   "v": 142
+  },
+  {
+   "k": "8 Sep",
+   "v": 168
+  },
+  {
+   "k": "15 Sep",
+   "v": 155
+  },
+  {
+   "k": "22 Sep",
+   "v": 201
+  },
+  {
+   "k": "29 Sep",
+   "v": 236
+  },
+  {
+   "k": "6 Oct",
+   "v": 248
+  },
+  {
+   "k": "13 Oct",
+   "v": 291
+  },
+  {
+   "k": "20 Oct",
+   "v": 318
+  }
+ ]
+}

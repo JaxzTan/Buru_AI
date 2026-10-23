@@ -1,0 +1,263 @@
+// Unknown — Scam Intelligence Network
+// Schema per TRD v0.3 (23 Oct 2026), section 4. Regenerate from migrations with db2dbml once they exist (G-6)
+// Paste into https://dbdiagram.io/d
+
+Project unknown {
+  database_type: 'PostgreSQL'
+  Note: 'PostgreSQL 15+. All timestamps timestamptz (UTC). messages, entity_sightings and verifications are append-only (NFR-8).'
+}
+
+// ─────────────── Enums ───────────────
+
+Enum operator_role { operator admin }
+Enum persona_status { draft active paused retired }
+Enum channel { telegram whatsapp }
+Enum account_status { active banned cooldown }
+Enum scam_type { job investment romance parcel impersonation loan other }
+Enum conversation_status { bot human closed }
+Enum message_direction { inbound outbound }
+Enum sender_type { scammer persona operator }
+Enum entity_type { bank_account wallet phone url handle }
+Enum entity_status { unverified verified rejected }
+Enum confidence_level { low medium high }
+Enum verification_decision { verified rejected }
+Enum chain { tron ethereum }
+Enum customer_type { bank ewallet exchange }
+Enum key_status { active revoked }
+Enum delivery_status { pending delivered failed }
+
+// ─────────────── Operators (internal) ───────────────
+
+Table operators {
+  id bigint [pk, increment]
+  email varchar(255) [not null, unique]
+  role operator_role [not null, default: 'operator']
+  totp_secret_ref varchar(255) [not null, note: 'Pointer to secret store, never the raw secret']
+  created_at timestamptz [not null, default: `now()`]
+  Note: 'Implied by operator auth (TRD §7) and verification.operator_id'
+}
+
+// ─────────────── Personas & honeypot accounts ───────────────
+
+Table personas {
+  id bigint [pk, increment]
+  name varchar(100) [not null]
+  age smallint
+  language_mix jsonb [not null, note: 'e.g. {"en":0.5,"ms":0.3,"zh":0.2}']
+  backstory text
+  wealth_profile jsonb
+  status persona_status [not null, default: 'draft']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table persona_prompt_versions {
+  id bigint [pk, increment]
+  persona_id bigint [not null, ref: > personas.id]
+  version int [not null]
+  system_prompt text [not null]
+  created_by bigint [ref: > operators.id]
+  created_at timestamptz [not null, default: `now()`]
+  indexes {
+    (persona_id, version) [unique]
+  }
+  Note: 'TR-1: store prompts versioned'
+}
+
+Table playbooks {
+  id bigint [pk, increment]
+  scam_type scam_type [not null]
+  name varchar(100) [not null]
+  version int [not null, default: 1]
+  stages jsonb [not null, note: 'Ordered stage machine: rapport -> bait -> payment_request -> stall']
+  created_at timestamptz [not null, default: `now()`]
+  Note: 'TR-4: playbook per scam type'
+}
+
+Table persona_playbooks {
+  persona_id bigint [ref: > personas.id]
+  playbook_id bigint [ref: > playbooks.id]
+  indexes {
+    (persona_id, playbook_id) [pk]
+  }
+  Note: 'Replaces persona.playbook_ids list with a join table'
+}
+
+Table honeypot_accounts {
+  id bigint [pk, increment]
+  persona_id bigint [not null, ref: > personas.id]
+  channel channel [not null]
+  phone varchar(32) [not null, unique]
+  session_ref varchar(255) [not null, note: 'Pointer to session file in secret store']
+  status account_status [not null, default: 'active']
+  banned_at timestamptz
+  cooldown_until timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  indexes {
+    (status, channel)
+  }
+  Note: 'TR-2, TR-17 (ban/cooldown tracking)'
+}
+
+// ─────────────── Conversations ───────────────
+
+Table conversations {
+  id bigint [pk, increment]
+  account_id bigint [not null, ref: > honeypot_accounts.id]
+  playbook_id bigint [ref: > playbooks.id]
+  temporal_workflow_id varchar(128) [not null, unique]
+  scammer_handle varchar(255) [not null]
+  scam_type scam_type [note: 'Null until classifier runs (TR-7)']
+  stage varchar(32) [not null, default: 'rapport']
+  status conversation_status [not null, default: 'bot']
+  started_at timestamptz [not null]
+  last_message_at timestamptz
+  closed_at timestamptz
+  indexes {
+    (account_id, scammer_handle)
+    (status, last_message_at)
+  }
+}
+
+Table messages {
+  id bigint [pk, increment]
+  conversation_id bigint [not null, ref: > conversations.id]
+  direction message_direction [not null]
+  sender_type sender_type [not null]
+  operator_id bigint [ref: > operators.id, note: 'Set when an operator sent it after takeover']
+  body_ciphertext bytea [not null, note: 'Envelope-encrypted (TR-14)']
+  dek_ref varchar(255) [not null, note: 'Wrapped data key reference']
+  sent_at timestamptz [not null]
+  indexes {
+    (conversation_id, sent_at)
+  }
+  Note: 'APPEND-ONLY'
+}
+
+// ─────────────── Intelligence ───────────────
+
+Table entities {
+  id bigint [pk, increment]
+  type entity_type [not null]
+  value_normalized varchar(512) [not null]
+  bank_or_chain varchar(32) [note: 'Bank code (MBB, CIMB...) or chain; NULL when not applicable. uq_entity is UNIQUE NULLS NOT DISTINCT (set in migration; DBML cannot express it)']
+  confidence confidence_level [not null, default: 'low']
+  status entity_status [not null, default: 'unverified']
+  sightings_count int [not null, default: 0, note: 'Denormalised for fast lookup response']
+  first_seen timestamptz [not null]
+  last_seen timestamptz [not null]
+  indexes {
+    (type, value_normalized, bank_or_chain) [unique, name: 'uq_entity']
+    (status, last_seen)
+  }
+}
+
+Table entity_sightings {
+  id bigint [pk, increment]
+  entity_id bigint [not null, ref: > entities.id]
+  conversation_id bigint [not null, ref: > conversations.id]
+  message_id bigint [not null, ref: > messages.id]
+  extracted_at timestamptz [not null]
+  indexes {
+    (entity_id, message_id) [unique]
+    conversation_id
+  }
+  Note: 'APPEND-ONLY audit trail (NFR-8). Many-to-many entities <-> conversations'
+}
+
+Table verifications {
+  id bigint [pk, increment]
+  entity_id bigint [not null, ref: > entities.id]
+  operator_id bigint [not null, ref: > operators.id]
+  decision verification_decision [not null]
+  note text
+  decided_at timestamptz [not null]
+  indexes {
+    (entity_id, decided_at)
+  }
+  Note: 'APPEND-ONLY (TR-9)'
+}
+
+Table chain_transfers {
+  id bigint [pk, increment]
+  wallet_entity_id bigint [not null, ref: > entities.id, note: 'The scam wallet this trace started from']
+  chain chain [not null]
+  token varchar(16) [not null, default: 'USDT']
+  tx_hash varchar(128) [not null]
+  log_index int [not null, default: 0, note: 'One tx can contain several transfers']
+  from_wallet varchar(128) [not null]
+  to_wallet varchar(128) [not null]
+  amount decimal(38,18) [not null]
+  hop smallint [not null, note: '1 or 2 (TR-8)']
+  to_label varchar(128) [note: 'e.g. Binance deposit']
+  ts timestamptz [not null]
+  indexes {
+    (chain, tx_hash, log_index, wallet_entity_id) [unique]
+    wallet_entity_id
+    to_wallet
+  }
+}
+
+// ─────────────── Customers ───────────────
+
+Table customers {
+  id bigint [pk, increment]
+  name varchar(255) [not null]
+  type customer_type [not null]
+  webhook_url varchar(512)
+  webhook_secret_ref varchar(255) [note: 'HMAC signing secret (TR-12)']
+  watch_rules jsonb [note: 'e.g. {"entity_types":["bank_account"],"banks":["MBB"]}']
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table customer_users {
+  id bigint [pk, increment]
+  customer_id bigint [not null, ref: > customers.id]
+  email varchar(255) [not null, unique]
+  password_hash varchar(255) [not null]
+  created_at timestamptz [not null, default: `now()`]
+  Note: 'Implied by customer dashboard login (TRD §3, §7)'
+}
+
+Table api_keys {
+  id bigint [pk, increment]
+  customer_id bigint [not null, ref: > customers.id]
+  key_prefix varchar(16) [not null, note: 'Shown in UI to identify the key']
+  key_hash varchar(255) [not null, unique]
+  status key_status [not null, default: 'active']
+  rate_limit_per_min int [not null, default: 600]
+  created_at timestamptz [not null, default: `now()`]
+  revoked_at timestamptz
+}
+
+Table lookup_logs {
+  id bigint [pk, increment]
+  customer_id bigint [not null, ref: > customers.id]
+  api_key_id bigint [not null, ref: > api_keys.id]
+  entity_type entity_type [not null]
+  matched boolean [not null]
+  latency_ms int [not null]
+  ts timestamptz [not null]
+  indexes {
+    (customer_id, ts)
+  }
+  Note: 'Usage + billing (FR-13). Does not store the looked-up value.'
+}
+
+Table webhook_deliveries {
+  id bigint [pk, increment]
+  customer_id bigint [not null, ref: > customers.id]
+  entity_id bigint [not null, ref: > entities.id]
+  event_type varchar(64) [not null, default: 'entity.verified']
+  payload jsonb [not null]
+  status delivery_status [not null, default: 'pending']
+  attempts int [not null, default: 0]
+  last_response_code smallint
+  created_at timestamptz [not null, default: `now()`]
+  delivered_at timestamptz
+  indexes {
+    (customer_id, created_at)
+    (status)
+  }
+  Note: 'TR-12 delivery log'
+}
