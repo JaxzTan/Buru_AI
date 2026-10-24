@@ -43,6 +43,9 @@ type Live struct {
 	TelegramSystem     string
 	TelegramTestDC     int // 1-3 = Telegram test network (development only); 0 = production
 
+	// SimEnabled turns on the local chat simulator (cmd/simchat). Default: on when BURU_ENV=local.
+	SimEnabled bool
+
 	ReplyReadMin time.Duration
 	ReplyReadMax time.Duration
 	TypingCPS    float64
@@ -94,6 +97,14 @@ func Load() (Config, error) {
 	}
 	if l.TelegramTestDC, err = atoiEnv("BURU_TG_TEST_DC", 0); err != nil {
 		return c, err
+	}
+	switch strings.ToLower(os.Getenv("BURU_SIM")) {
+	case "1", "true", "on":
+		l.SimEnabled = true
+	case "0", "false", "off":
+		l.SimEnabled = false
+	default:
+		l.SimEnabled = c.Env == "local"
 	}
 	for _, h := range strings.Split(os.Getenv("BURU_TG_ONLY_FROM"), ",") {
 		if h = strings.ToLower(strings.TrimSpace(h)); h != "" {

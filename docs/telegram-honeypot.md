@@ -42,7 +42,20 @@ make tglogin PHONE=+60XXXXXXXXX PERSONA=1
 make run                  # BURU_MODE=live; logs "telegram account connected"
 ```
 
-## No SIM yet? Try Telegram's test network
+## No SIM yet? Use the local chat simulator
+
+Chat with a persona from your terminal. Only the Telegram connection is simulated; the conversation workflow (≥ 10 s delays, typing), the LLM persona, extraction, stages, takeover and lookup are all real.
+
+```sh
+# .env needs BURU_MODE=live, BURU_ENV=local, BURU_OPERATOR_TOKEN, BURU_MESSAGE_KEY, GEMINI_API_KEY
+make run                          # terminal 1
+make sim PERSONA=1                # terminal 2: you are the scammer, Auntie Mei replies
+make sim PERSONA=1 AS=gold_mentor # a different scammer name starts a separate conversation
+```
+
+Takeover, verification and lookup work on simulated conversations exactly as below (`GET /internal/conversations` shows them). Simulated accounts are `honeypot_accounts` rows with phone `sim-<persona id>` and `session_ref` starting with `sim:`; the Telegram connector ignores them. Turn the simulator off with `BURU_SIM=0` (it is off by default outside `BURU_ENV=local`).
+
+## Or try Telegram's test network
 
 Telegram runs a separate test network with fake numbers `99966XYYYY` (X = test DC 1-3, YYYY = any digits). The login code is X repeated, 5 or 6 times. **Since 2026 Telegram may refuse random test numbers** (`PHONE_CODE_INVALID`); if both code lengths fail, use a prepaid SIM on the real network instead.
 

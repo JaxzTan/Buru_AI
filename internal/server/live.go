@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JaxzTan/Buru_AI/internal/channel/sim"
 	"github.com/JaxzTan/Buru_AI/internal/db"
 	"github.com/JaxzTan/Buru_AI/internal/honeypot"
 	"github.com/JaxzTan/Buru_AI/internal/llm"
@@ -27,6 +28,7 @@ type liveAPI struct {
 	connect    honeypot.AccountConnector
 	token      string
 	operatorID int64
+	sim        *sim.Hub // development chat simulator; nil when disabled
 }
 
 func (a *liveAPI) register(mux *http.ServeMux) {
@@ -56,6 +58,69 @@ func (a *liveAPI) register(mux *http.ServeMux) {
 
 	h("GET /internal/entities", a.listEntities)
 	h("POST /internal/entities/{id}/verify", a.verify)
+
+	if a.sim != nil {
+		h("POST /internal/sim/accounts", a.simAccount)
+		h("POST /internal/sim/messages", a.simMessage)
+		h("GET /internal/sim/events", a.simEvents)
+	}
+}
+
+// ---- development chat simulator ----
+
+func (a *liveAPI) simAccount(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		PersonaID int64 `json:"persona_id"`
+	}
+	if err := readJSON(r, &b); err != nil {
+		badJSON(w, err)
+		return
+	}
+	acct, err := a.svc.SimAccount(r.Context(), b.PersonaID)
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
+	p, err := a.svc.Q.GetPersona(r.Context(), acct.PersonaID)
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"account_id": acct.ID, "persona": p.Name, "persona_status": p.Status})
+}
+
+func (a *liveAPI) simMessage(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		AccountID int64  `json:"account_id"`
+		From      string `json:"from"`
+		Text      string `json:"text"`
+	}
+	if err := readJSON(r, &b); err != nil {
+		badJSON(w, err)
+		return
+	}
+	if err := a.svc.SimInbound(r.Context(), b.AccountID, b.From, b.Text); err != nil {
+		fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
+}
+
+// simEvents long-polls (up to 25 s) for the persona's messages, typing and read receipts.
+func (a *liveAPI) simEvents(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	acct, err1 := strconv.ParseInt(q.Get("account_id"), 10, 64)
+	after, _ := strconv.ParseInt(q.Get("after"), 10, 64)
+	if err1 != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "account_id required"})
+		return
+	}
+	peer, _ := honeypot.SimPeer(q.Get("from"))
+	evs := a.sim.Events(r.Context(), acct, peer, after, 25*time.Second)
+	if evs == nil {
+		evs = []sim.Event{}
+	}
+	writeJSON(w, http.StatusOK, evs)
 }
 
 func (a *liveAPI) auth(next http.HandlerFunc) http.Handler {

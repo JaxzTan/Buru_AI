@@ -378,6 +378,6 @@ func (a *Activities) target(ctx context.Context, convID int64) (db.Conversation,
 	if err != nil {
 		return conv, acct, nil, err
 	}
-	sender, err := a.S.Senders.For(string(acct.Channel))
+	sender, err := a.S.SenderFor(acct)
 	return conv, acct, sender, err
 }

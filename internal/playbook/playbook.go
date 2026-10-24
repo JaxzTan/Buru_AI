@@ -95,11 +95,13 @@ func Next(current string, s Signals) string {
 
 var paymentWords = []string{
 	"transfer", "deposit", "top up", "topup", "top-up", "bank in", "bankin", "pay ", "payment", "send money",
-	"send usdt", " fee ", " fees ", " fee.", " fee,", "activate", "activation", "release", "withdraw", "account number", "wallet",
+	"send usdt", " fee ", " fees ", " fee.", " fee,", "activate", "activation", "account number", "your wallet",
 	"bayar", "pindah", "masukkan duit", "yuran", "akaun", "transfer duit", "转账", "汇款", "付款", "过数",
 }
 
 // AsksForPayment reports whether a scammer message asks the persona to move money.
+// Words about the scammer's own fake returns ("withdraw", "profit", "release") deliberately do not
+// count: they are bait, not a payment request.
 func AsksForPayment(text string) bool {
 	t := " " + strings.ToLower(text) + " "
 	for _, w := range paymentWords {

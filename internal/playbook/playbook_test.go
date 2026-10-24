@@ -25,7 +25,8 @@ func TestNext(t *testing.T) {
 
 func TestAsksForPayment(t *testing.T) {
 	yes := []string{"First task need deposit RM150", "Sila bayar yuran RM50", "pls TRANSFER now", "请先转账"}
-	no := []string{"Hi Auntie, how are you", "our company hiring part-time reviewer"}
+	no := []string{"Hi Auntie, how are you", "our company hiring part-time reviewer",
+		"our USDT plan give 8% weekly, my student already withdraw 3 times"}
 	for _, s := range yes {
 		if !AsksForPayment(s) {
 			t.Errorf("AsksForPayment(%q) = false", s)

@@ -21,6 +21,7 @@ import (
 	tlog "go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/worker"
 
+	"github.com/JaxzTan/Buru_AI/internal/channel/sim"
 	"github.com/JaxzTan/Buru_AI/internal/channel/telegram"
 	"github.com/JaxzTan/Buru_AI/internal/config"
 	"github.com/JaxzTan/Buru_AI/internal/db"
@@ -139,6 +140,12 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 	}
 	svc := honeypot.NewService(pool, box, personaLLM, extractLLM, tc, senders,
 		honeypot.Config{TaskQueue: cfg.TemporalTaskQueue, Timing: timing}, log)
+	var simHub *sim.Hub
+	if l.SimEnabled {
+		simHub = sim.NewHub()
+		svc.Sim = simHub
+		log.Info("local chat simulator enabled: make sim PERSONA=1")
+	}
 	(&honeypot.Activities{S: svc}).Register(w)
 
 	var connect honeypot.AccountConnector
@@ -161,6 +168,9 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 		}
 		senders.Register(gateway.ChannelTelegram, tgm)
 		connect = func(ctx context.Context, a db.HoneypotAccount) error {
+			if sim.IsSimAccount(a.SessionRef) {
+				return nil // simulated accounts need no connection
+			}
 			if a.Channel != db.ChannelTelegram {
 				return errors.New("only telegram accounts are supported in M1/M2 (WhatsApp is M4)")
 			}
@@ -171,6 +181,9 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 			return err
 		}
 		for _, a := range accts {
+			if sim.IsSimAccount(a.SessionRef) {
+				continue
+			}
 			if err := connect(ctx, a); err != nil {
 				log.Error("telegram account not started", "account_id", a.ID, "err", err)
 			}
@@ -181,5 +194,8 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 	}
 
 	srv.WithLive(svc, connect, l.OperatorToken, l.OperatorID)
+	if simHub != nil {
+		srv.WithSim(simHub)
+	}
 	return nil
 }

@@ -20,6 +20,7 @@ import (
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 
+	"github.com/JaxzTan/Buru_AI/internal/channel/sim"
 	"github.com/JaxzTan/Buru_AI/internal/db"
 	"github.com/JaxzTan/Buru_AI/internal/gateway"
 	"github.com/JaxzTan/Buru_AI/internal/llm"
@@ -40,6 +41,7 @@ type Service struct {
 	ExtractLLM llm.Client // nil → regex extraction + keyword classifier only
 	Temporal   client.Client
 	Senders    *gateway.Registry
+	Sim        gateway.Sender // dev-only simulated channel (internal/channel/sim); nil when disabled
 	Cfg        Config
 	Log        *slog.Logger
 	Now        func() time.Time
@@ -255,7 +257,7 @@ func (s *Service) OperatorSend(ctx context.Context, convID, operatorID int64, te
 	if err != nil {
 		return PlainMessage{}, err
 	}
-	sender, err := s.Senders.For(string(acct.Channel))
+	sender, err := s.SenderFor(acct)
 	if err != nil {
 		return PlainMessage{}, err
 	}
@@ -269,6 +271,18 @@ func (s *Service) OperatorSend(ctx context.Context, convID, operatorID int64, te
 		return PlainMessage{}, err
 	}
 	return s.decrypt(m)
+}
+
+// SenderFor picks the outbound sender for an account: the simulator for "sim:" accounts,
+// otherwise the connector registered for the account's channel.
+func (s *Service) SenderFor(acct db.HoneypotAccount) (gateway.Sender, error) {
+	if sim.IsSimAccount(acct.SessionRef) {
+		if s.Sim == nil {
+			return nil, fmt.Errorf("account %d is simulated but the simulator is disabled (BURU_SIM=1)", acct.ID)
+		}
+		return s.Sim, nil
+	}
+	return s.Senders.For(string(acct.Channel))
 }
 
 func randomInt63() int64 {

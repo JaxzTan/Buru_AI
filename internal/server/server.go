@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/JaxzTan/Buru_AI/internal/channel/sim"
 	"github.com/JaxzTan/Buru_AI/internal/demostore"
 	"github.com/JaxzTan/Buru_AI/internal/engine"
 	"github.com/JaxzTan/Buru_AI/internal/honeypot"
@@ -28,6 +29,14 @@ type Server struct {
 // messages and verifications until operator login (email + TOTP, TRD §7) exists.
 func (s *Server) WithLive(svc *honeypot.Service, connect honeypot.AccountConnector, operatorToken string, operatorID int64) *Server {
 	s.live = &liveAPI{svc: svc, connect: connect, token: operatorToken, operatorID: operatorID}
+	return s
+}
+
+// WithSim mounts the development chat simulator (/internal/sim/*). Call after WithLive.
+func (s *Server) WithSim(hub *sim.Hub) *Server {
+	if s.live != nil {
+		s.live.sim = hub
+	}
 	return s
 }
 

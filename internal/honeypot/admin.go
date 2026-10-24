@@ -6,14 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/JaxzTan/Buru_AI/internal/channel/sim"
 	"github.com/JaxzTan/Buru_AI/internal/db"
 	"github.com/JaxzTan/Buru_AI/internal/extraction"
+	"github.com/JaxzTan/Buru_AI/internal/gateway"
 	"github.com/JaxzTan/Buru_AI/internal/persona"
 )
 
@@ -387,3 +390,59 @@ func nullJSON(raw json.RawMessage) json.RawMessage {
 }
 
 func opID(id int64) pgtype.Int8 { return pgtype.Int8{Int64: id, Valid: id != 0} }
+
+// ---- local chat simulator (development only) ----
+
+// SimAccount returns the simulated honeypot account for a persona, creating it on first use.
+func (s *Service) SimAccount(ctx context.Context, personaID int64) (db.HoneypotAccount, error) {
+	p, err := s.Q.GetPersona(ctx, personaID)
+	if err != nil {
+		return db.HoneypotAccount{}, notFound(err)
+	}
+	phone := fmt.Sprintf("sim-%d", p.ID)
+	accts, err := s.Q.ListHoneypotAccounts(ctx)
+	if err != nil {
+		return db.HoneypotAccount{}, err
+	}
+	for _, a := range accts {
+		if a.Phone == phone {
+			return a, nil
+		}
+	}
+	return s.Q.CreateHoneypotAccount(ctx, db.CreateHoneypotAccountParams{PersonaID: p.ID, Channel: db.ChannelTelegram,
+		Phone: phone, SessionRef: sim.SessionPrefix + "local"})
+}
+
+var reSimName = regexp.MustCompile(`[^a-z0-9_]`)
+
+// SimPeer turns a free-form scammer name into the simulated sender's peer ref and handle.
+func SimPeer(name string) (peerRef, handle string) {
+	n := reSimName.ReplaceAllString(strings.ToLower(strings.TrimSpace(name)), "_")
+	if n == "" {
+		n = "scammer"
+	}
+	if len(n) > 24 {
+		n = n[:24]
+	}
+	return sim.SessionPrefix + n, "@sim_" + n
+}
+
+// SimInbound feeds a message from the simulated scammer into the normal inbound path.
+func (s *Service) SimInbound(ctx context.Context, accountID int64, from, text string) error {
+	text = strings.TrimSpace(text)
+	if text == "" || len(text) > 4000 {
+		return fmt.Errorf("%w: text must be 1-4000 characters", ErrBadRequest)
+	}
+	acct, err := s.Q.GetHoneypotAccount(ctx, accountID)
+	if err != nil {
+		return notFound(err)
+	}
+	if !sim.IsSimAccount(acct.SessionRef) {
+		return fmt.Errorf("%w: account %d is not a simulated account", ErrBadRequest, accountID)
+	}
+	peer, handle := SimPeer(from)
+	now := s.Now()
+	return s.HandleInbound(ctx, gateway.Inbound{Channel: gateway.ChannelTelegram, AccountID: acct.ID, PeerRef: peer,
+		Handle: handle, DisplayName: from, ChannelMsgID: fmt.Sprint(now.UnixNano()), Text: text, SentAt: now,
+		DedupeKey: fmt.Sprintf("sim:%d:%s:%d", acct.ID, peer, now.UnixNano())})
+}
