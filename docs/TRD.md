@@ -4,8 +4,8 @@
 |---|---|
 | Author | Jaxz Tan |
 | Status | Draft |
-| Version | 0.3 |
-| Last updated | 23 Oct 2026 |
+| Version | 0.4 |
+| Last updated | 24 Oct 2026 |
 | Related PRD | [PRD.md](PRD.md) |
 
 **Revision history**
@@ -15,6 +15,7 @@
 | 0.1 | 21 Oct 2026 | First draft. |
 | 0.2 | 23 Oct 2026 | Database moved from MySQL 8 to PostgreSQL 15+; data access via sqlc + pgx; migrations via golang-migrate. Data model synced with schema (added operators, prompt versions, playbooks, customer users, webhook deliveries; plural table names; persona statuses). |
 | 0.3 | 23 Oct 2026 | Fixed §2/§7 contradiction on query builders; §4 now points to `db/schema.dbml` as a generated diagram; added §12 implementation gaps. |
+| 0.4 | 24 Oct 2026 | Live Telegram honeypot (M1 + M2): LLM access goes through a provider interface with Gemini 3.8 Flash as the configured default (Claude still supported); migration 000004 adds `personas.profile`/`demo_identifiers`, `conversations.scammer_peer_ref`, `messages.dedupe_key` and append-only triggers; G-4 and G-5 closed; G-7 to G-10 added. |
 
 ## 1. Overview & scope
 
@@ -87,7 +88,7 @@ flowchart TB
 | Migrations | golang-migrate | Versioned up/down SQL files; same folder is sqlc's schema source. | Atlas |
 | Cache | Redis | Lookup API hot cache; rate limiting. | In-memory only |
 | Queue | Temporal task queues (MVP); Kafka later | Avoid extra infra until volume justifies it. | Kafka from day one |
-| LLM | Claude API — larger model for personas, smaller model for extraction | Strong multilingual + code-switching; structured output for extraction. | Self-hosted open model |
+| LLM | Provider interface (`internal/llm`). Default: Gemini 3.8 Flash (`gemini-3.8-flash`, thinking level low) for personas and extraction; Claude API supported via `BURU_LLM_PROVIDER=anthropic` | Swap providers by config; personas, extraction and the persona generator never call a vendor SDK directly. | Self-hosted open model |
 | Telegram | gotd/td (Go MTProto client) | User accounts behave like real people, unlike bots. | Bot API (scammers ignore bots) |
 | WhatsApp | whatsmeow (Go) | Only practical Go option for personal accounts. | Official Business API (not suitable for personas) |
 | Chain data | TronGrid + Etherscan APIs | USDT on TRON is dominant in SEA scams. | Paid analytics provider |
@@ -108,7 +109,7 @@ npx @dbml/cli db2dbml postgres "$DATABASE_URL" -o db/schema.dbml
 | Entity | Key fields | Relations / notes |
 |---|---|---|
 | `operators` | id, email, role (operator/admin), totp_secret_ref, created_at | Referenced by prompt versions, messages, verifications |
-| `personas` | id, name, age, language_mix (jsonb), backstory, wealth_profile (jsonb), status (draft/active/paused/retired) | 1 → many `honeypot_accounts`; many ↔ many `playbooks` |
+| `personas` | id, name, age, language_mix (jsonb), backstory, wealth_profile (jsonb), profile (jsonb), demo_identifiers (jsonb, masked), status (draft/active/paused/retired) | 1 → many `honeypot_accounts`; many ↔ many `playbooks`. `profile` holds persona-generator fields; demo identifiers are masked and never placed in a prompt |
 | `persona_prompt_versions` | id, persona_id, version, system_prompt, created_by, created_at | Unique (persona_id, version) — TR-1 |
 | `playbooks` | id, scam_type, name, version, stages (jsonb) | Stage machine per scam type — TR-4 |
 | `persona_playbooks` | persona_id, playbook_id | Join table |
@@ -118,8 +119,8 @@ npx @dbml/cli db2dbml postgres "$DATABASE_URL" -o db/schema.dbml
 
 | Entity | Key fields | Relations / notes |
 |---|---|---|
-| `conversations` | id, account_id, playbook_id, temporal_workflow_id, scammer_handle, scam_type, stage, status (bot/human/closed), started_at, last_message_at, closed_at | 1 → many `messages` |
-| `messages` | id, conversation_id, direction, sender_type (scammer/persona/operator), operator_id, body_ciphertext (bytea), dek_ref, sent_at | **Append-only**. Envelope-encrypted — TR-14 |
+| `conversations` | id, account_id, playbook_id, temporal_workflow_id, scammer_handle, scammer_peer_ref, scam_type, stage, status (bot/human/closed), started_at, last_message_at, closed_at | 1 → many `messages`. `scammer_peer_ref` is the channel reply address (Telegram: user id + access hash) |
+| `messages` | id, conversation_id, direction, sender_type (scammer/persona/operator), operator_id, body_ciphertext (bytea), dek_ref, sent_at, dedupe_key | **Append-only** (grants + triggers). Encrypted — TR-14. `dedupe_key` makes redelivered updates and retried sends idempotent |
 
 **Intelligence**
 
@@ -276,6 +277,8 @@ This section tracks where the code still differs from this TRD. Delete each row 
 
 | # | Gap | Current code | Target | Done when |
 |---|---|---|---|---|
-| G-4 | sqlc | `sqlc.yaml`, `db/queries` and generated `internal/db` exist; CI runs `sqlc diff` and `sqlc vet`. The app still serves from in-memory `internal/demostore` | Handlers call `internal/db` | Repositories use generated code |
-| G-5 | Confidence type | `internal/extraction/extract.go` emits a float (0.75–0.9) | Persisted as `confidence_level` enum: score < 0.8 → `low`, ≥ 0.8 → `medium`; only operator verification sets `high` | Mapping in place with unit tests |
 | G-6 | Schema diagram | `db/schema.dbml` hand-copied from design | Regenerated from real migrations with `db2dbml` | File matches applied migrations |
+| G-7 | Operator auth | Live operator API and `/v1/lookup` use one bearer token (`BURU_OPERATOR_TOKEN`) mapped to `BURU_OPERATOR_ID` | Operators: email + TOTP with roles; customers: hashed API keys (FR-13, M3) | Token removed |
+| G-8 | Envelope encryption | AES-256-GCM with one key from `BURU_MESSAGE_KEY`; `dek_ref = local:v1` | Per-conversation data keys wrapped by a KMS (TR-14, M3) | Rows re-encrypted or readable under both refs |
+| G-9 | Telegram update state | gotd update state and access hashes are in memory; messages sent while the app is down are not replayed | Persistent state storage per account (e.g. bbolt or PostgreSQL) | Restart replays missed messages |
+| G-10 | Account health | Connector stops an account on `AUTH_KEY_UNREGISTERED` / `USER_DEACTIVATED*` and logs it | TR-17: set status `banned`/`cooldown` and alert the operator (M4) | Status changes automatically |

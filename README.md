@@ -23,6 +23,7 @@ Multilingual AI personas run on honeypot messaging accounts and keep scammers ta
 
 - Product requirements: [docs/PRD.md](docs/PRD.md)
 - Technical design: [docs/TRD.md](docs/TRD.md)
+- Live Telegram honeypot setup and testing: [docs/telegram-honeypot.md](docs/telegram-honeypot.md)
 
 ## Features
 
@@ -81,9 +82,15 @@ Create `.env` at the repo root and set:
 ```bash
 make up            # PostgreSQL :5432, Redis :6379, Temporal :7233 (UI :8233)
 make migrate-up
-make run           # API on :8080
+make run           # API on :8080 (BURU_MODE=demo: in-memory pitch data)
 curl localhost:8080/readyz
 make web           # dashboard on :3000
+```
+
+Live honeypot on a real Telegram account (`BURU_MODE=live`): see [docs/telegram-honeypot.md](docs/telegram-honeypot.md).
+
+```sh
+make seed && make tglogin PHONE=+60XXXXXXXXX PERSONA=1 && make run
 ```
 
 Smoke-test the Temporal worker:
@@ -100,10 +107,16 @@ docker compose exec temporal temporal workflow execute \
 | `make up` / `make down` | Start / stop local dependencies |
 | `make migrate-up` / `make migrate-down` | Apply / roll back one migration |
 | `make sqlc` | Generate `internal/db` from `db/queries` |
+| `make seed` | Load demo operator, playbooks and personas |
+| `make keys` | Print fresh `BURU_OPERATOR_TOKEN` and `BURU_MESSAGE_KEY` values |
+| `make tglogin PHONE=… PERSONA=…` | Log a honeypot number into Telegram and bind it |
+| `make sim PERSONA=…` | Chat with a persona without Telegram (needs `make run`) |
+| `make tgchat PHONE=… TO=…` | Play the scammer from your terminal |
 | `make run` | Run the API + Temporal worker |
 | `make web` | Run the dashboard |
 | `make test` | `go test -race ./...` |
 | `make test-db` | DB integration tests (needs `make up migrate-up`) |
+| `make test-e2e` | End-to-end honeypot loop on local PostgreSQL + Temporal |
 | `make lint` | `go vet` + golangci-lint |
 
 ## Project Structure
@@ -113,19 +126,26 @@ docker compose exec temporal temporal workflow execute \
 | `cmd/buru` | Entry point: HTTP server + Temporal worker |
 | `internal/config` | Env-based config |
 | `internal/server` | HTTP routes, health checks |
-| `internal/workflows` | Temporal workflows (conversation workflow) |
+| `internal/workflows` | Temporal `ConversationWorkflow`: reply timing, typing, takeover (TR-3, TR-5) |
+| `internal/gateway` | Channel-neutral inbound/outbound types and sender registry (TR-2) |
+| `internal/channel/telegram` | Telegram connector on gotd/td (FR-2) |
+| `internal/honeypot` | Live engine: inbound routing, workflow activities, operator actions, lookup |
+| `internal/persona` | Persona system prompt, output guard, persona generator (TR-1) |
+| `internal/playbook` | Playbook stage machine (TR-4) |
+| `internal/llm` | LLM boundary: Gemini and Claude clients |
+| `internal/msgcrypt` | Message encryption at rest (TR-14) |
+| `cmd/tglogin` | One-time Telegram login for a honeypot number |
+| `internal/extraction` | Entity extraction + scam classification (TR-6, TR-7) |
+| `internal/tracer` | On-chain USDT tracing (TR-8) |
+| `internal/intel` | Entity store, dedupe, verification (TR-9) |
+| `internal/customerapi` | Lookup API, API keys, webhooks (TR-10, TR-12, TR-13) |
+| `db/migrations` | PostgreSQL schema (golang-migrate) |
+| `db/queries` | sqlc query files; `make sqlc` generates `internal/db` |
+| `db/seed` | Demo operator, playbooks and personas (`make seed`) |
+| `web` | Next.js dashboard: `/operator` console, `/portal` customer portal. `/api/*` proxies to the Go API |
 | `internal/engine` | Honeypot loop: extract → classify → stage → persona reply |
-| `internal/gateway` | Telegram/WhatsApp message normalisation |
-| `internal/persona` | Persona prompts and playbooks |
-| `internal/extraction` | Entity extraction + scam classification |
-| `internal/tracer` | On-chain USDT tracing |
-| `internal/intel` | Entity store, dedupe, verification |
-| `internal/customerapi` | Lookup API, API keys, webhooks |
 | `internal/db` | sqlc-generated data layer |
 | `internal/demostore` | In-memory data layer seeded from `seed.json` (to be replaced by PostgreSQL + Redis) |
-| `db/migrations` | PostgreSQL schema (golang-migrate) |
-| `db/queries` | sqlc query files |
-| `web` | Next.js dashboard: `/operator` console, `/portal` customer portal; `/api/*` proxies to the Go API |
 | `docs` | PRD, TRD, contributing rules |
 
 ## Roadmap

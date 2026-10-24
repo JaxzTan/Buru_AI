@@ -1,5 +1,6 @@
-// Package workflows holds Temporal workflows. One ConversationWorkflow per scammer
-// conversation will live here (TR-3, TR-5); Ping exists to prove the worker is wired.
+// Package workflows holds Temporal workflows: one ConversationWorkflow per scammer conversation
+// (TR-3, TR-5, conversation.go); Ping exists to prove the worker is wired. Activities live in
+// internal/honeypot and are registered there by name.
 package workflows
 
 import (
@@ -14,4 +15,5 @@ func Ping(_ workflow.Context, name string) (string, error) {
 // Register adds every workflow and activity to the worker.
 func Register(w worker.Worker) {
 	w.RegisterWorkflow(Ping)
+	w.RegisterWorkflow(ConversationWorkflow)
 }

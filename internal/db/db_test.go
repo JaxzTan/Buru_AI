@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -129,15 +128,19 @@ func TestLookupSingleAndBatch(t *testing.T) {
 	}
 }
 
-// NFR-8: the app role cannot change or remove audit records. Runs last in its tx because the error aborts it.
+// NFR-8: the app role can add audit records but never change or remove them.
+// Checks grants directly, so it also runs where the test user cannot SET ROLE (Supabase's postgres is not superuser).
 func TestAppendOnlyForAppRole(t *testing.T) {
-	ctx, q, tx := setup(t)
-	_, c, _ := seedConversation(t, ctx, q)
-	if _, err := tx.Exec(ctx, "SET LOCAL ROLE buru_app"); err != nil {
-		t.Fatal(err)
-	}
-	_, err := tx.Exec(ctx, "UPDATE messages SET dek_ref = 'tampered' WHERE conversation_id = $1", c.ID)
-	if err == nil || !strings.Contains(err.Error(), "permission denied") {
-		t.Fatalf("UPDATE messages as buru_app err = %v; want permission denied", err)
+	ctx, _, tx := setup(t)
+	for _, table := range []string{"messages", "entity_sightings", "verifications"} {
+		for priv, want := range map[string]bool{"SELECT": true, "INSERT": true, "UPDATE": false, "DELETE": false, "TRUNCATE": false} {
+			var got bool
+			if err := tx.QueryRow(ctx, "SELECT has_table_privilege('buru_app', $1, $2)", table, priv).Scan(&got); err != nil {
+				t.Fatal(err)
+			}
+			if got != want {
+				t.Errorf("buru_app %s on %s = %v; want %v", priv, table, got, want)
+			}
+		}
 	}
 }

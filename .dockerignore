@@ -1,0 +1,12 @@
+# Go app image (Dockerfile). Secrets reach the container via env_file, never the build context.
+.env*
+.git
+web
+docs
+bin
+out
+coverage.out
+*.session
+.DS_Store
+.idea
+.vscode

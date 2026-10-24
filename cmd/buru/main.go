@@ -1,4 +1,8 @@
 // Command buru runs the modular monolith: HTTP API plus the Temporal worker.
+//
+// BURU_MODE=demo (default) serves the in-memory pitch demo with the scripted scammer simulator.
+// BURU_MODE=live runs the real honeypot: Telegram connector → conversation workflows → persona LLM,
+// with everything stored in PostgreSQL.
 package main
 
 import (
@@ -17,14 +21,22 @@ import (
 	tlog "go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/worker"
 
+	"github.com/JaxzTan/Buru_AI/internal/channel/sim"
+	"github.com/JaxzTan/Buru_AI/internal/channel/telegram"
 	"github.com/JaxzTan/Buru_AI/internal/config"
+	"github.com/JaxzTan/Buru_AI/internal/db"
 	"github.com/JaxzTan/Buru_AI/internal/demostore"
+	"github.com/JaxzTan/Buru_AI/internal/gateway"
+	"github.com/JaxzTan/Buru_AI/internal/honeypot"
+	"github.com/JaxzTan/Buru_AI/internal/llm"
+	"github.com/JaxzTan/Buru_AI/internal/msgcrypt"
 	"github.com/JaxzTan/Buru_AI/internal/server"
 	"github.com/JaxzTan/Buru_AI/internal/workflows"
 )
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(log)
 	if err := run(log); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
@@ -40,14 +52,14 @@ func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	db, err := pgxpool.New(ctx, cfg.PostgresURL)
+	pool, err := pgxpool.New(ctx, cfg.PostgresURL)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer pool.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	tc, err := client.Dial(client.Options{
 		HostPort:  cfg.TemporalHostPort,
@@ -61,31 +73,135 @@ func run(log *slog.Logger) error {
 
 	w := worker.New(tc, cfg.TemporalTaskQueue, worker.Options{})
 	workflows.Register(w)
+
+	srv := server.New(pool, rdb)
+	if cfg.Mode == "live" {
+		if err := wireLive(ctx, cfg, pool, tc, w, srv, log); err != nil {
+			return err
+		}
+	} else {
+		demo, err := demostore.New() // seeded data for the pitch demo
+		if err != nil {
+			return err
+		}
+		srv = srv.WithDemo(demo)
+	}
+
 	if err := w.Start(); err != nil {
 		return err
 	}
 	defer w.Stop()
 
-	demo, err := demostore.New() // seeded data for the pitch demo
-	if err != nil {
-		return err
-	}
-
-	srv := &http.Server{
+	httpSrv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           server.New(db, rdb).WithDemo(demo).Routes(),
+		Handler:           srv.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(shutdownCtx)
+		_ = httpSrv.Shutdown(shutdownCtx)
 	}()
 
-	log.Info("listening", "addr", cfg.HTTPAddr, "env", cfg.Env)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	log.Info("listening", "addr", cfg.HTTPAddr, "env", cfg.Env, "mode", cfg.Mode)
+	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
+	}
+	return nil
+}
+
+// wireLive builds the live honeypot: LLM clients, message encryption, honeypot service,
+// Temporal activities, the Telegram connector, and the PostgreSQL-backed API.
+func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc client.Client, w worker.Worker, srv *server.Server, log *slog.Logger) error {
+	l := cfg.Live
+	box, err := msgcrypt.New(l.MessageKey)
+	if err != nil {
+		return err
+	}
+	personaLLM, err := llm.New(llm.Config{Provider: l.LLMProvider, Model: l.PersonaModel, GeminiKey: l.GeminiAPIKey, AnthropicKey: l.AnthropicAPIKey, ThinkingLevel: l.PersonaThinking})
+	if err != nil {
+		return err
+	}
+	extractLLM, err := llm.New(llm.Config{Provider: l.LLMProvider, Model: l.ExtractModel, GeminiKey: l.GeminiAPIKey, AnthropicKey: l.AnthropicAPIKey, ThinkingLevel: "low"})
+	if err != nil {
+		return err
+	}
+	if personaLLM == nil {
+		log.Warn("no LLM key configured: personas will answer with playbook example lines only")
+	} else {
+		log.Info("persona LLM ready", "llm", personaLLM.Name(), "per_try_timeout", l.LLMTryTimeout)
+		// Retry stalled or briefly failing calls with a fresh short deadline (see llm.Retrying).
+		personaLLM = llm.Retrying{Inner: personaLLM, Attempts: 3, PerTry: l.LLMTryTimeout, Backoff: 500 * time.Millisecond}
+	}
+	if extractLLM != nil {
+		extractLLM = llm.Retrying{Inner: extractLLM, Attempts: 2, PerTry: 9 * time.Second, Backoff: 300 * time.Millisecond}
+	}
+
+	honeypot.SetPersonaLLMTimeout(l.LLMTimeout)
+	senders := gateway.NewRegistry()
+	timing := workflows.Timing{ReadMin: l.ReplyReadMin, ReadMax: l.ReplyReadMax, CharsPerSecond: l.TypingCPS, Inactivity: l.Inactivity}
+	if timing.ReadMin < workflows.MinReplyDelay {
+		log.Warn("BURU_REPLY_READ_MIN below the FR-3 floor; replies still wait at least 10s", "configured", timing.ReadMin)
+	}
+	svc := honeypot.NewService(pool, box, personaLLM, extractLLM, tc, senders,
+		honeypot.Config{TaskQueue: cfg.TemporalTaskQueue, Timing: timing}, log)
+	var simHub *sim.Hub
+	if l.SimEnabled {
+		simHub = sim.NewHub()
+		svc.Sim = simHub
+		log.Info("local chat simulator enabled: make sim PERSONA=1")
+	}
+	(&honeypot.Activities{S: svc}).Register(w)
+
+	var connect honeypot.AccountConnector
+	if l.TelegramAppID != 0 && l.TelegramAppHash != "" {
+		only := map[string]bool{}
+		for _, h := range l.TelegramOnlyFrom {
+			only[h] = true
+		}
+		device := telegram.DefaultDevice()
+		if l.TelegramDevice != "" {
+			device.DeviceModel = l.TelegramDevice
+		}
+		if l.TelegramSystem != "" {
+			device.SystemVersion = l.TelegramSystem
+		}
+		tgm, err := telegram.NewManager(telegram.Config{AppID: l.TelegramAppID, AppHash: l.TelegramAppHash,
+			SessionDir: l.TelegramSessionDir, Device: device, OnlyFrom: only, TestDC: l.TelegramTestDC, Log: log}, svc)
+		if err != nil {
+			return err
+		}
+		senders.Register(gateway.ChannelTelegram, tgm)
+		connect = func(ctx context.Context, a db.HoneypotAccount) error {
+			if sim.IsSimAccount(a.SessionRef) {
+				return nil // simulated accounts need no connection
+			}
+			if a.Channel != db.ChannelTelegram {
+				return errors.New("only telegram accounts are supported in M1/M2 (WhatsApp is M4)")
+			}
+			return tgm.Start(ctx, telegram.Account{ID: a.ID, Phone: a.Phone, SessionRef: a.SessionRef})
+		}
+		accts, err := db.New(pool).ListActiveAccountsByChannel(ctx, db.ChannelTelegram)
+		if err != nil {
+			return err
+		}
+		for _, a := range accts {
+			if sim.IsSimAccount(a.SessionRef) {
+				continue
+			}
+			if err := connect(ctx, a); err != nil {
+				log.Error("telegram account not started", "account_id", a.ID, "err", err)
+			}
+		}
+		log.Info("telegram connector ready", "accounts", len(accts), "only_from", l.TelegramOnlyFrom, "test_dc", l.TelegramTestDC)
+	} else {
+		log.Warn("BURU_TG_APP_ID / BURU_TG_APP_HASH not set: Telegram connector disabled")
+	}
+
+	srv.WithLive(svc, connect, l.OperatorToken, l.OperatorID)
+	if simHub != nil {
+		srv.WithSim(simHub)
 	}
 	return nil
 }
