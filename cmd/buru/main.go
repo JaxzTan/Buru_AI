@@ -155,7 +155,7 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 			device.SystemVersion = l.TelegramSystem
 		}
 		tgm, err := telegram.NewManager(telegram.Config{AppID: l.TelegramAppID, AppHash: l.TelegramAppHash,
-			SessionDir: l.TelegramSessionDir, Device: device, OnlyFrom: only, Log: log}, svc)
+			SessionDir: l.TelegramSessionDir, Device: device, OnlyFrom: only, TestDC: l.TelegramTestDC, Log: log}, svc)
 		if err != nil {
 			return err
 		}
@@ -175,7 +175,7 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 				log.Error("telegram account not started", "account_id", a.ID, "err", err)
 			}
 		}
-		log.Info("telegram connector ready", "accounts", len(accts), "only_from", l.TelegramOnlyFrom)
+		log.Info("telegram connector ready", "accounts", len(accts), "only_from", l.TelegramOnlyFrom, "test_dc", l.TelegramTestDC)
 	} else {
 		log.Warn("BURU_TG_APP_ID / BURU_TG_APP_HASH not set: Telegram connector disabled")
 	}

@@ -41,6 +41,7 @@ type Live struct {
 	TelegramOnlyFrom   []string // optional allowlist while testing: "@handle" or "tg:<user id>"
 	TelegramDevice     string
 	TelegramSystem     string
+	TelegramTestDC     int // 1-3 = Telegram test network (development only); 0 = production
 
 	ReplyReadMin time.Duration
 	ReplyReadMax time.Duration
@@ -89,6 +90,9 @@ func Load() (Config, error) {
 		return c, err
 	}
 	if l.TelegramAppID, err = atoiEnv("BURU_TG_APP_ID", 0); err != nil {
+		return c, err
+	}
+	if l.TelegramTestDC, err = atoiEnv("BURU_TG_TEST_DC", 0); err != nil {
 		return c, err
 	}
 	for _, h := range strings.Split(os.Getenv("BURU_TG_ONLY_FROM"), ",") {

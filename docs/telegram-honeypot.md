@@ -42,6 +42,22 @@ make tglogin PHONE=+60XXXXXXXXX PERSONA=1
 make run                  # BURU_MODE=live; logs "telegram account connected"
 ```
 
+## No SIM yet? Try Telegram's test network
+
+Telegram runs a separate test network with fake numbers `99966XYYYY` (X = test DC 1-3, YYYY = any digits). The login code is X repeated, 5 or 6 times. **Since 2026 Telegram may refuse random test numbers** (`PHONE_CODE_INVALID`); if both code lengths fail, use a prepaid SIM on the real network instead.
+
+```sh
+# in .env
+BURU_TG_TEST_DC=2
+BURU_TG_ONLY_FROM=            # leave empty on the test network (it is isolated)
+
+make tglogin PHONE=9996620001 PERSONA=1          # the honeypot (Auntie Mei); code 22222 or 222222
+make run                                          # terminal 1
+make tgchat PHONE=9996620002 TO=9996620001        # terminal 2: you, as the scammer
+```
+
+Type in the `tgchat` terminal as the scammer; Auntie Mei's replies and "typing…" appear there. Test accounts are public (anyone can log into the same number) and the network is wiped from time to time: development only. Remove `BURU_TG_TEST_DC` before using a real SIM.
+
 ## Test it
 
 1. From **your own** Telegram, open the honeypot's username and send something a scammer would, e.g.

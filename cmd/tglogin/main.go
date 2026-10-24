@@ -5,12 +5,13 @@
 //	go run ./cmd/tglogin -phone +60123456789               # log in, write the session file
 //	go run ./cmd/tglogin -phone +60123456789 -persona 1    # ...and bind it to persona 1 in PostgreSQL
 //
+// With BURU_TG_TEST_DC=2 it uses Telegram's test network instead (numbers 99966 2 XXXX, code 22222).
+//
 // Session files are secrets (they are a logged-in Telegram account). They are written with 0600
 // permissions to BURU_TG_SESSION_DIR, which is git-ignored. Never commit or share them.
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -20,13 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gotd/td/session"
-	"github.com/gotd/td/telegram"
-	"github.com/gotd/td/telegram/auth"
-	"github.com/gotd/td/tg"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/term"
 
 	tgconn "github.com/JaxzTan/Buru_AI/internal/channel/telegram"
 	"github.com/JaxzTan/Buru_AI/internal/db"
@@ -40,28 +36,57 @@ func main() {
 }
 
 func run() error {
-	phone := flag.String("phone", "", "honeypot phone number in international format, e.g. +60123456789")
+	phone := flag.String("phone", "", "honeypot phone number: +60123456789, or 99966XYYYY on the test network")
 	personaID := flag.Int64("persona", 0, "optional: persona id to bind this account to (inserts into honeypot_accounts)")
 	dir := flag.String("session-dir", getenv("BURU_TG_SESSION_DIR", ".secrets/telegram"), "where to store the session file")
 	flag.Parse()
-	if *phone == "" || !strings.HasPrefix(*phone, "+") {
-		return errors.New("-phone is required in international format, e.g. -phone +60123456789")
+	if *phone == "" {
+		return errors.New("-phone is required, e.g. -phone +60123456789 (or 9996621234 with BURU_TG_TEST_DC=2)")
 	}
-	appID, err := strconv.Atoi(os.Getenv("BURU_TG_APP_ID"))
-	appHash := os.Getenv("BURU_TG_APP_HASH")
-	if err != nil || appID == 0 || appHash == "" {
-		return errors.New("set BURU_TG_APP_ID and BURU_TG_APP_HASH (from https://my.telegram.org → API development tools) in .env")
-	}
-
-	ref := tgconn.SessionRef(*phone)
-	path, err := tgconn.SessionPath(*dir, ref)
+	cfg, err := loginConfig(*phone, *dir)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(*dir, 0o700); err != nil {
-		return err
+	if cfg.TestDC != 0 {
+		fmt.Printf("Using Telegram's TEST network (DC %d). This account cannot talk to real Telegram users.\n", cfg.TestDC)
+	}
+	if *personaID != 0 && cfg.TestDC != 0 {
+		cfg.SignUpName = personaName(*personaID)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	self, ref, err := tgconn.Login(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("telegram login: %w", err)
+	}
+	handle := "(no username set)"
+	if self.Username != "" {
+		handle = "@" + self.Username
+	}
+	fmt.Printf("\nLogged in as %s %s, %s (user id %d)\nsession_ref: %s\n", self.FirstName, self.LastName, handle, self.ID, ref)
+
+	if *personaID == 0 {
+		fmt.Printf("\nBind it to a persona with: make tglogin PHONE=%s PERSONA=<id>\n", *phone)
+		return nil
+	}
+	phoneKey := *phone
+	if cfg.TestDC != 0 {
+		phoneKey, _, _ = tgconn.TestPhone(*phone, cfg.TestDC)
+	}
+	return bind(ctx, *personaID, phoneKey, ref)
+}
+
+func loginConfig(phone, dir string) (tgconn.LoginConfig, error) {
+	appID, _ := strconv.Atoi(os.Getenv("BURU_TG_APP_ID"))
+	testDC := 0
+	if v := os.Getenv("BURU_TG_TEST_DC"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return tgconn.LoginConfig{}, fmt.Errorf("BURU_TG_TEST_DC must be 1, 2 or 3")
+		}
+		testDC = n
+	}
 	device := tgconn.DefaultDevice()
 	if v := os.Getenv("BURU_TG_DEVICE_MODEL"); v != "" {
 		device.DeviceModel = v
@@ -69,42 +94,28 @@ func run() error {
 	if v := os.Getenv("BURU_TG_SYSTEM_VERSION"); v != "" {
 		device.SystemVersion = v
 	}
+	return tgconn.LoginConfig{AppID: appID, AppHash: os.Getenv("BURU_TG_APP_HASH"), SessionDir: dir, Phone: phone,
+		TestDC: testDC, Device: device}, nil
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+// personaName looks up the persona's name for a new test account (best effort).
+func personaName(id int64) string {
+	url := os.Getenv("BURU_POSTGRES_URL")
+	if url == "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	client := telegram.NewClient(appID, appHash, telegram.Options{
-		SessionStorage: &session.FileStorage{Path: path},
-		Device:         device,
-		NoUpdates:      true,
-	})
-	var self *tg.User
-	err = client.Run(ctx, func(ctx context.Context) error {
-		flow := auth.NewFlow(terminalAuth{phone: *phone}, auth.SendCodeOptions{})
-		if err := client.Auth().IfNecessary(ctx, flow); err != nil {
-			return err
-		}
-		var err error
-		self, err = client.Self(ctx)
-		return err
-	})
+	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
-		return fmt.Errorf("telegram login: %w", err)
+		return ""
 	}
-	_ = os.Chmod(path, 0o600)
-
-	handle := "(no username set: add one in Telegram settings so you can find it)"
-	if self.Username != "" {
-		handle = "@" + self.Username
+	defer pool.Close()
+	p, err := db.New(pool).GetPersona(ctx, id)
+	if err != nil {
+		return ""
 	}
-	fmt.Printf("\nLogged in as %s %s, %s (user id %d)\n", self.FirstName, self.LastName, handle, self.ID)
-	fmt.Printf("Session saved to %s\nsession_ref: %s\n", path, ref)
-
-	if *personaID == 0 {
-		fmt.Printf("\nBind it to a persona with:\n  go run ./cmd/tglogin -phone %s -persona <id>\nor POST /internal/accounts {\"persona_id\":<id>,\"channel\":\"telegram\",\"phone\":%q,\"session_ref\":%q}\n", *phone, *phone, ref)
-		return nil
-	}
-	return bind(ctx, *personaID, *phone, ref)
+	return p.Name
 }
 
 func bind(ctx context.Context, personaID int64, phone, ref string) error {
@@ -139,32 +150,6 @@ func bind(ctx context.Context, personaID int64, phone, ref string) error {
 	}
 	fmt.Println("Restart `make run` (or POST /internal/accounts/" + strconv.FormatInt(acct.ID, 10) + "/connect) to bring it online.")
 	return nil
-}
-
-// terminalAuth prompts on the terminal for the login code and 2FA password.
-type terminalAuth struct{ phone string }
-
-func (a terminalAuth) Phone(context.Context) (string, error) { return a.phone, nil }
-
-func (terminalAuth) Password(context.Context) (string, error) {
-	fmt.Print("2-step verification password: ")
-	b, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Println()
-	return strings.TrimSpace(string(b)), err
-}
-
-func (terminalAuth) Code(context.Context, *tg.AuthSentCode) (string, error) {
-	fmt.Print("Login code (sent to the honeypot account's Telegram app or by SMS): ")
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	return strings.TrimSpace(line), err
-}
-
-func (terminalAuth) AcceptTermsOfService(_ context.Context, tos tg.HelpTermsOfService) error {
-	return &auth.SignUpRequired{TermsOfService: tos}
-}
-
-func (terminalAuth) SignUp(context.Context) (auth.UserInfo, error) {
-	return auth.UserInfo{}, errors.New("this number has no Telegram account yet: install Telegram on the honeypot phone and sign up there first")
 }
 
 func getenv(k, def string) string {

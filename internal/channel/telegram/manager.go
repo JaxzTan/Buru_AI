@@ -34,7 +34,9 @@ type Config struct {
 	// OnlyFrom, when non-empty, restricts replies to these handles ("@name") or user ids
 	// ("tg:123"). Use it while testing so a honeypot never engages anyone else.
 	OnlyFrom map[string]bool
-	Log      *slog.Logger
+	// TestDC 1-3 connects to Telegram's test network instead of production (development only).
+	TestDC int
+	Log    *slog.Logger
 }
 
 // Account is the subset of honeypot_accounts the connector needs.
@@ -83,6 +85,9 @@ func NewManager(cfg Config, h gateway.InboundHandler) (*Manager, error) {
 	}
 	if cfg.Device.DeviceModel == "" {
 		cfg.Device = DefaultDevice()
+	}
+	if err := ApplyNetwork(&telegram.Options{}, cfg.TestDC); err != nil {
+		return nil, err
 	}
 	return &Manager{cfg: cfg, handler: h, log: cfg.Log.With("component", "telegram"), conns: map[int64]*conn{}}, nil
 }
@@ -159,12 +164,14 @@ func (m *Manager) runLoop(ctx context.Context, c *conn, sessionPath string) {
 func (m *Manager) runOnce(ctx context.Context, c *conn, sessionPath string, lg *slog.Logger) error {
 	dispatcher := tg.NewUpdateDispatcher()
 	gaps := updates.New(updates.Config{Handler: dispatcher, UserAccessHasher: c.hashes})
-	client := telegram.NewClient(m.cfg.AppID, m.cfg.AppHash, telegram.Options{
+	opts := telegram.Options{
 		SessionStorage: &session.FileStorage{Path: sessionPath},
 		UpdateHandler:  gaps,
 		Device:         m.cfg.Device,
 		Middlewares:    []telegram.Middleware{floodwait.NewSimpleWaiter().WithMaxWait(2 * time.Minute)},
-	})
+	}
+	_ = ApplyNetwork(&opts, m.cfg.TestDC) // validated in NewManager
+	client := telegram.NewClient(m.cfg.AppID, m.cfg.AppHash, opts)
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, u *tg.UpdateNewMessage) error {
 		m.onMessage(ctx, c, e, u.Message, lg)
 		return nil // never break the update loop over one message

@@ -5,7 +5,7 @@ MIGRATE_DB := postgres://buru:buru@localhost:5432/buru?sslmode=disable
 # sqlc from PATH, else where `go install` puts it
 SQLC := $(or $(shell command -v sqlc),$(shell go env GOPATH)/bin/sqlc)
 
-.PHONY: up down migrate-up migrate-down seed keys tglogin sqlc run web test test-db test-e2e lint
+.PHONY: up down migrate-up migrate-down seed keys tglogin tgchat sqlc run web test test-db test-e2e lint
 
 up: ## start PostgreSQL, Redis, Temporal
 	docker compose up -d --wait postgres redis temporal
@@ -28,6 +28,9 @@ keys: ## print fresh values for BURU_OPERATOR_TOKEN and BURU_MESSAGE_KEY
 
 tglogin: ## log a honeypot number into Telegram: make tglogin PHONE=+60123456789 PERSONA=1
 	go run ./cmd/tglogin -phone '$(PHONE)' $(if $(PERSONA),-persona $(PERSONA),)
+
+tgchat: ## play the scammer from your terminal: make tgchat PHONE=<your test account> TO=<honeypot phone or @username>
+	go run ./cmd/tgchat -phone '$(PHONE)' -to '$(TO)'
 
 sqlc: ## regenerate internal/db from db/migrations + db/queries
 	$(SQLC) generate
