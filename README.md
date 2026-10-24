@@ -183,4 +183,4 @@ MIT. See [LICENSE](LICENSE).
 
 **Andy Wong**
 - GitHub: [@Andybunnny](https://github.com/Andybunnny)
-- LinkedIn: [andy-wong-andybunnny](https://www.linkedin.com/in/andywongjiandao/)
+- LinkedIn: [andy-wong-jian-dao](https://www.linkedin.com/in/andywongjiandao/)
