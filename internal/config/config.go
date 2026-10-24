@@ -46,11 +46,12 @@ type Live struct {
 	// SimEnabled turns on the local chat simulator (cmd/simchat). Default: on when BURU_ENV=local.
 	SimEnabled bool
 
-	LLMTimeout   time.Duration // per persona reply; falls back to the playbook line when exceeded
-	ReplyReadMin time.Duration
-	ReplyReadMax time.Duration
-	TypingCPS    float64
-	Inactivity   time.Duration
+	LLMTimeout    time.Duration // per persona reply; falls back to the playbook line when exceeded
+	LLMTryTimeout time.Duration // per attempt; a stalled call is retried within LLMTimeout
+	ReplyReadMin  time.Duration
+	ReplyReadMax  time.Duration
+	TypingCPS     float64
+	Inactivity    time.Duration
 }
 
 func Load() (Config, error) {
@@ -125,6 +126,9 @@ func Load() (Config, error) {
 		return c, err
 	}
 	if l.LLMTimeout, err = durEnv("BURU_LLM_TIMEOUT", 45*time.Second); err != nil {
+		return c, err
+	}
+	if l.LLMTryTimeout, err = durEnv("BURU_LLM_TRY_TIMEOUT", 14*time.Second); err != nil {
 		return c, err
 	}
 	if l.TypingCPS, err = floatEnv("BURU_TYPING_CPS", 3.5); err != nil {

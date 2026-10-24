@@ -130,7 +130,12 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 	if personaLLM == nil {
 		log.Warn("no LLM key configured: personas will answer with playbook example lines only")
 	} else {
-		log.Info("persona LLM ready", "llm", personaLLM.Name())
+		log.Info("persona LLM ready", "llm", personaLLM.Name(), "per_try_timeout", l.LLMTryTimeout)
+		// Retry stalled or briefly failing calls with a fresh short deadline (see llm.Retrying).
+		personaLLM = llm.Retrying{Inner: personaLLM, Attempts: 3, PerTry: l.LLMTryTimeout, Backoff: 500 * time.Millisecond}
+	}
+	if extractLLM != nil {
+		extractLLM = llm.Retrying{Inner: extractLLM, Attempts: 2, PerTry: 9 * time.Second, Backoff: 300 * time.Millisecond}
 	}
 
 	honeypot.SetPersonaLLMTimeout(l.LLMTimeout)
