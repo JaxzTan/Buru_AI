@@ -18,6 +18,8 @@ import (
 	"go.temporal.io/sdk/worker"
 
 	"github.com/JaxzTan/Buru_AI/internal/config"
+	"github.com/JaxzTan/Buru_AI/internal/connector/telegram"
+	tgstore "github.com/JaxzTan/Buru_AI/internal/connector/telegram/store"
 	"github.com/JaxzTan/Buru_AI/internal/demostore"
 	"github.com/JaxzTan/Buru_AI/internal/gateway"
 	"github.com/JaxzTan/Buru_AI/internal/gateway/fake"
@@ -75,8 +77,21 @@ func run(log *slog.Logger) error {
 
 	api := server.New(db, rdb).WithDemo(demo)
 	var conns []gateway.Connector
+	fakeChannels := []gateway.Channel{gateway.Telegram, gateway.WhatsApp}
+	if cfg.Telegram {
+		tcfg, err := telegram.FromEnv()
+		if err != nil {
+			return err
+		}
+		st, err := tgstore.Open(cfg.TelegramStore, rdb)
+		if err != nil {
+			return err
+		}
+		conns = append(conns, telegram.New(tcfg, st))
+		fakeChannels = []gateway.Channel{gateway.WhatsApp} // one connector per channel
+	}
 	if os.Getenv("BURU_SIMULATE") != "0" {
-		conns = append(conns, fake.New(demo))
+		conns = append(conns, fake.New(demo, fakeChannels...))
 	}
 	if err := api.StartGateway(ctx, conns...); err != nil {
 		return err
