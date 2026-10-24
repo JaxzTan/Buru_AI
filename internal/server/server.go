@@ -8,8 +8,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/JaxzTan/Buru_AI/internal/channel/sim"
 	"github.com/JaxzTan/Buru_AI/internal/demostore"
 	"github.com/JaxzTan/Buru_AI/internal/engine"
+	"github.com/JaxzTan/Buru_AI/internal/honeypot"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -19,6 +21,23 @@ type Server struct {
 	redis *redis.Client
 	demo  *demostore.Store // optional: live demo data
 	eng   *engine.Engine
+	live  *liveAPI // BURU_MODE=live: PostgreSQL-backed API (takes precedence over demo)
+}
+
+// WithLive serves the PostgreSQL-backed operator API (/internal/*) and lookup (/v1/lookup).
+// operatorToken guards every route; operatorID is recorded on prompt versions, operator
+// messages and verifications until operator login (email + TOTP, TRD §7) exists.
+func (s *Server) WithLive(svc *honeypot.Service, connect honeypot.AccountConnector, operatorToken string, operatorID int64) *Server {
+	s.live = &liveAPI{svc: svc, connect: connect, token: operatorToken, operatorID: operatorID}
+	return s
+}
+
+// WithSim mounts the development chat simulator (/internal/sim/*). Call after WithLive.
+func (s *Server) WithSim(hub *sim.Hub) *Server {
+	if s.live != nil {
+		s.live.sim = hub
+	}
+	return s
 }
 
 func New(db *pgxpool.Pool, rdb *redis.Client) *Server {
@@ -40,7 +59,10 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("GET /readyz", s.readyz)
-	if s.demo != nil {
+	switch {
+	case s.live != nil:
+		s.live.register(mux)
+	case s.demo != nil:
 		s.registerDemo(mux)
 	}
 	return mux

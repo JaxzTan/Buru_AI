@@ -13,7 +13,7 @@ SQLC := $(or $(shell command -v sqlc),$(shell go env GOPATH)/bin/sqlc)
 # golangci-lint v2 under either name, else where `go install` puts it
 GOLANGCI := $(or $(shell command -v golangci-lint-v2),$(shell command -v golangci-lint),$(shell go env GOPATH)/bin/golangci-lint)
 
-.PHONY: up down migrate-up migrate-down sqlc run web test test-db lint
+.PHONY: up down migrate-up migrate-down seed keys tglogin tgchat sim sqlc run web test test-db test-e2e lint
 
 up: ## start PostgreSQL, Redis, Temporal
 	docker compose up -d --wait postgres redis temporal
@@ -26,6 +26,22 @@ migrate-up:
 
 migrate-down:
 	@migrate -path db/migrations -database '$(MIGRATE_DB)' down 1
+
+seed: ## demo operator, playbooks and the four console personas (idempotent)
+	docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U buru -d buru < db/seed/001_demo.sql
+
+keys: ## print fresh values for BURU_OPERATOR_TOKEN and BURU_MESSAGE_KEY
+	@echo "BURU_OPERATOR_TOKEN=$$(openssl rand -hex 24)"
+	@echo "BURU_MESSAGE_KEY=$$(openssl rand -base64 32)"
+
+tglogin: ## log a honeypot number into Telegram: make tglogin PHONE=+60123456789 PERSONA=1
+	go run ./cmd/tglogin -phone '$(PHONE)' $(if $(PERSONA),-persona $(PERSONA),)
+
+sim: ## chat with a persona without Telegram (needs `make run`): make sim PERSONA=1 [AS=scammer_name]
+	go run ./cmd/simchat -persona $(or $(PERSONA),1) -as '$(if $(filter command line,$(origin AS)),$(AS),scammer)'
+
+tgchat: ## play the scammer from your terminal: make tgchat PHONE=<your test account> TO=<honeypot phone or @username>
+	go run ./cmd/tgchat -phone '$(PHONE)' -to '$(TO)'
 
 sqlc: ## regenerate internal/db from db/migrations + db/queries
 	$(SQLC) generate
@@ -42,6 +58,9 @@ test:
 
 test-db: ## DB integration tests on MIGRATE_DB; writes run in rolled-back transactions
 	@BURU_TEST_POSTGRES_URL='$(MIGRATE_DB)' go test -count=1 ./internal/db/
+
+test-e2e: ## full honeypot loop on local PostgreSQL + Temporal; needs `make up migrate-up`
+	BURU_TEST_POSTGRES_URL='$(MIGRATE_DB)' BURU_TEST_TEMPORAL=localhost:7233 go test -count=1 -v -run TestE2E ./internal/honeypot/
 
 lint:
 	go vet ./...

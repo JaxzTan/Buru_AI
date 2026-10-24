@@ -1030,6 +1030,7 @@ type Conversation struct {
 	StartedAt          time.Time          `json:"started_at"`
 	LastMessageAt      *time.Time         `json:"last_message_at"`
 	ClosedAt           *time.Time         `json:"closed_at"`
+	ScammerPeerRef     pgtype.Text        `json:"scammer_peer_ref"`
 }
 
 type Customer struct {
@@ -1101,6 +1102,7 @@ type Message struct {
 	BodyCiphertext []byte           `json:"body_ciphertext"`
 	DekRef         string           `json:"dek_ref"`
 	SentAt         time.Time        `json:"sent_at"`
+	DedupeKey      pgtype.Text      `json:"dedupe_key"`
 }
 
 type Operator struct {
@@ -1112,15 +1114,17 @@ type Operator struct {
 }
 
 type Persona struct {
-	ID            int64           `json:"id"`
-	Name          string          `json:"name"`
-	Age           pgtype.Int2     `json:"age"`
-	LanguageMix   json.RawMessage `json:"language_mix"`
-	Backstory     pgtype.Text     `json:"backstory"`
-	WealthProfile json.RawMessage `json:"wealth_profile"`
-	Status        PersonaStatus   `json:"status"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
+	ID              int64           `json:"id"`
+	Name            string          `json:"name"`
+	Age             pgtype.Int2     `json:"age"`
+	LanguageMix     json.RawMessage `json:"language_mix"`
+	Backstory       pgtype.Text     `json:"backstory"`
+	WealthProfile   json.RawMessage `json:"wealth_profile"`
+	Status          PersonaStatus   `json:"status"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+	Profile         json.RawMessage `json:"profile"`
+	DemoIdentifiers json.RawMessage `json:"demo_identifiers"`
 }
 
 type PersonaPlaybook struct {
