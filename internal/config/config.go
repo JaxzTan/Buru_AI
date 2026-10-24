@@ -9,7 +9,7 @@ import (
 type Config struct {
 	Env               string // local | staging | prod
 	HTTPAddr          string
-	MySQLDSN          string
+	PostgresURL       string
 	RedisAddr         string
 	TemporalHostPort  string
 	TemporalNamespace string
@@ -20,14 +20,14 @@ func Load() (Config, error) {
 	c := Config{
 		Env:               getenv("BURU_ENV", "local"),
 		HTTPAddr:          getenv("BURU_HTTP_ADDR", ":8080"),
-		MySQLDSN:          os.Getenv("BURU_MYSQL_DSN"),
+		PostgresURL:       os.Getenv("BURU_POSTGRES_URL"),
 		RedisAddr:         getenv("BURU_REDIS_ADDR", "localhost:6379"),
 		TemporalHostPort:  getenv("BURU_TEMPORAL_HOSTPORT", "localhost:7233"),
 		TemporalNamespace: getenv("BURU_TEMPORAL_NAMESPACE", "default"),
 		TemporalTaskQueue: getenv("BURU_TEMPORAL_TASK_QUEUE", "buru-main"),
 	}
-	if c.MySQLDSN == "" {
-		return c, fmt.Errorf("BURU_MYSQL_DSN is required")
+	if c.PostgresURL == "" {
+		return c, fmt.Errorf("BURU_POSTGRES_URL is required")
 	}
 	return c, nil
 }
