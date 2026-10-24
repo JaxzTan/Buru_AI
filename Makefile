@@ -47,7 +47,7 @@ sqlc: ## regenerate internal/db from db/migrations + db/queries
 	$(SQLC) generate
 	$(SQLC) vet
 
-run:
+run: up
 	go run ./cmd/buru
 
 web: ## dashboard on :3000, proxies /api to :8080
