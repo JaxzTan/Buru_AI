@@ -309,3 +309,79 @@ func newTronAddress() string {
 	}
 	return string(out)
 }
+
+// hangingLLM never answers until its context is cancelled, like an unreachable LLM endpoint.
+type hangingLLM struct{}
+
+func (hangingLLM) Name() string { return "hanging" }
+func (hangingLLM) Generate(ctx context.Context, _ llm.Request) (string, error) {
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func TestE2EHungLLMStillReplies(t *testing.T) {
+	pgURL, temporalAddr := os.Getenv("BURU_TEST_POSTGRES_URL"), os.Getenv("BURU_TEST_TEMPORAL")
+	if pgURL == "" || temporalAddr == "" {
+		t.Skip("set BURU_TEST_POSTGRES_URL and BURU_TEST_TEMPORAL to run the end-to-end test")
+	}
+	oldHelper, oldPersona := helperLLMTimeout, personaLLMTimeout
+	helperLLMTimeout, personaLLMTimeout = 2*time.Second, 3*time.Second
+	defer func() { helperLLMTimeout, personaLLMTimeout = oldHelper, oldPersona }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, pgURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	tc, err := client.Dial(client.Options{HostPort: temporalAddr})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tc.Close()
+
+	box, _ := msgcrypt.New(base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32)))
+	sender := &fakeSender{}
+	senders := gateway.NewRegistry()
+	senders.Register(gateway.ChannelTelegram, sender)
+	queue := fmt.Sprintf("e2e-hung-%d", time.Now().UnixNano())
+	timing := workflows.Timing{ReadMin: time.Second, ReadMax: 11 * time.Second, TypingMin: time.Second, TypingMax: time.Second}
+	svc := NewService(pool, box, hangingLLM{}, hangingLLM{}, tc, senders, Config{TaskQueue: queue, Timing: timing},
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+	w := worker.New(tc, queue, worker.Options{})
+	workflows.Register(w)
+	(&Activities{S: svc}).Register(w)
+	if err := w.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+
+	suffix := time.Now().UnixNano()
+	p, err := svc.CreatePersona(ctx, PersonaInput{Name: fmt.Sprintf("Hung Auntie %d", suffix), Age: 62, Status: "active",
+		LanguageMix: []byte(`{"en":1}`), ScamTypes: []string{"investment"}}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acct, err := svc.BindAccount(ctx, AccountInput{PersonaID: p.ID, Channel: "telegram", Phone: fmt.Sprintf("+61%d", suffix%1e10), SessionRef: "file:hung.json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := svc.HandleInbound(ctx, gateway.Inbound{Channel: "telegram", AccountID: acct.ID, PeerRef: fmt.Sprintf("tg:user:%d:1", suffix),
+		Handle: "@hung_test", Text: "Good morning auntie, our USDT plan give 8% weekly", SentAt: time.Now().UTC(),
+		DedupeKey: fmt.Sprintf("hung:%d", suffix)}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, ctx, func() bool { return sender.count() >= 1 }, "fallback reply with a hung LLM")
+	elapsed := time.Since(start)
+	if elapsed > 40*time.Second {
+		t.Fatalf("reply took %v with a hung LLM; it should fall back within the time limits", elapsed)
+	}
+	if got := sender.sent[0].text; got != "my FD only give 2.5%, my friend say crypto better" {
+		t.Fatalf("expected the investment rapport playbook line, got %q", got)
+	}
+	t.Logf("hung LLM: fallback reply after %v", elapsed.Round(time.Second))
+	_ = svc.SetPersonaStatus(ctx, p.ID, "retired")
+	_ = svc.SetAccountStatus(ctx, acct.ID, "banned", nil)
+}

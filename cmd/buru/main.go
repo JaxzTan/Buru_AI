@@ -133,6 +133,7 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 		log.Info("persona LLM ready", "llm", personaLLM.Name())
 	}
 
+	honeypot.SetPersonaLLMTimeout(l.LLMTimeout)
 	senders := gateway.NewRegistry()
 	timing := workflows.Timing{ReadMin: l.ReplyReadMin, ReadMax: l.ReplyReadMax, CharsPerSecond: l.TypingCPS, Inactivity: l.Inactivity}
 	if timing.ReadMin < workflows.MinReplyDelay {

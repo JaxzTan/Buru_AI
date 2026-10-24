@@ -149,6 +149,11 @@ func ConversationWorkflow(ctx workflow.Context, in ConversationInput) error {
 		StartToCloseTimeout: 2 * time.Minute,
 		RetryPolicy:         &temporal.RetryPolicy{InitialInterval: 2 * time.Second, MaximumAttempts: 5},
 	})
+	// ProcessInbound makes up to two bounded LLM calls (~20 s each); never let it stall replies.
+	processCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 75 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{InitialInterval: 2 * time.Second, MaximumAttempts: 2},
+	})
 	llmCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Minute,
 		RetryPolicy:         &temporal.RetryPolicy{InitialInterval: 3 * time.Second, MaximumAttempts: 3},
@@ -176,13 +181,14 @@ func ConversationWorkflow(ctx workflow.Context, in ConversationInput) error {
 	}
 
 	onInbound := func(sig InboundSignal) {
+		// The reply clock starts when the message arrives, not after processing it.
+		now := workflow.Now(ctx)
 		// Extraction, classification and stage update happen for every message, even while an
 		// operator holds the conversation, so no intelligence is lost (FR-6, FR-7).
 		var res ProcessInboundResult
-		if err := workflow.ExecuteActivity(quick, ActProcessInbound, ProcessInboundInput{id, sig.MessageID}).Get(ctx, &res); err != nil {
+		if err := workflow.ExecuteActivity(processCtx, ActProcessInbound, ProcessInboundInput{id, sig.MessageID}).Get(ctx, &res); err != nil {
 			lg.Error("ProcessInbound failed", "conversation_id", id, "message_id", sig.MessageID, "error", err)
 		}
-		now := workflow.Now(ctx)
 		st.lastInbound = now
 		if !st.pending {
 			st.pending = true

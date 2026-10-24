@@ -30,7 +30,7 @@ tglogin: ## log a honeypot number into Telegram: make tglogin PHONE=+60123456789
 	go run ./cmd/tglogin -phone '$(PHONE)' $(if $(PERSONA),-persona $(PERSONA),)
 
 sim: ## chat with a persona without Telegram (needs `make run`): make sim PERSONA=1 [AS=scammer_name]
-	go run ./cmd/simchat -persona $(or $(PERSONA),1) -as '$(or $(AS),scammer)'
+	go run ./cmd/simchat -persona $(or $(PERSONA),1) -as '$(if $(filter command line,$(origin AS)),$(AS),scammer)'
 
 tgchat: ## play the scammer from your terminal: make tgchat PHONE=<your test account> TO=<honeypot phone or @username>
 	go run ./cmd/tgchat -phone '$(PHONE)' -to '$(TO)'

@@ -21,6 +21,20 @@ import (
 	"github.com/JaxzTan/Buru_AI/internal/workflows"
 )
 
+// LLM time limits. Extraction and classification fall back to regex and keywords; the persona
+// falls back to the playbook's example line. Override with BURU_LLM_TIMEOUT (persona replies).
+var (
+	helperLLMTimeout  = 20 * time.Second
+	personaLLMTimeout = 45 * time.Second
+)
+
+// SetPersonaLLMTimeout changes the persona reply time limit (from config).
+func SetPersonaLLMTimeout(d time.Duration) {
+	if d > 0 {
+		personaLLMTimeout = d
+	}
+}
+
 // Activities are the side effects of ConversationWorkflow.
 type Activities struct{ S *Service }
 
@@ -56,7 +70,9 @@ func (a *Activities) ProcessInbound(ctx context.Context, in workflows.ProcessInb
 		return workflows.ProcessInboundResult{}, err
 	}
 
-	found, xerr := extraction.ExtractWithLLM(ctx, s.ExtractLLM, pm.Text)
+	xctx, cancel := context.WithTimeout(ctx, helperLLMTimeout)
+	found, xerr := extraction.ExtractWithLLM(xctx, s.ExtractLLM, pm.Text)
+	cancel()
 	if xerr != nil {
 		s.Log.Warn("LLM extraction failed; using regex results", "conversation_id", conv.ID, "err", xerr)
 	}
@@ -167,7 +183,9 @@ func (a *Activities) classify(ctx context.Context, convID int64) (string, error)
 			scammer = append(scammer, m.Text)
 		}
 	}
-	return extraction.ClassifyWithLLM(ctx, a.S.ExtractLLM, strings.Join(scammer, "\n")), nil
+	cctx, cancel := context.WithTimeout(ctx, helperLLMTimeout)
+	defer cancel()
+	return extraction.ClassifyWithLLM(cctx, a.S.ExtractLLM, strings.Join(scammer, "\n")), nil
 }
 
 // setScamType stores the label and switches to the matching playbook: the persona's own playbook
@@ -276,9 +294,14 @@ func (a *Activities) GenerateReply(ctx context.Context, in workflows.Conversatio
 		if try > 0 {
 			sys += "\n\n(Your previous draft broke the rules above. Write a new reply, fully in character.)"
 		}
-		out, err := s.PersonaLLM.Generate(ctx, llm.Request{System: sys, Turns: turns, MaxOutputTokens: 2048, Effort: llm.EffortLow})
+		gctx, cancel := context.WithTimeout(ctx, personaLLMTimeout)
+		out, err := s.PersonaLLM.Generate(gctx, llm.Request{System: sys, Turns: turns, MaxOutputTokens: 2048, Effort: llm.EffortLow})
+		timedOut := gctx.Err() != nil
+		cancel()
 		if err != nil {
-			if !errors.Is(err, llm.ErrBlocked) && activity.GetInfo(ctx).Attempt < 3 {
+			// Retry quick failures (HTTP 5xx, 429). A blocked reply or a hung call falls back to the
+			// playbook line at once, so a slow LLM never leaves the scammer waiting for minutes.
+			if !errors.Is(err, llm.ErrBlocked) && !timedOut && activity.GetInfo(ctx).Attempt < 3 {
 				return workflows.GenerateReplyResult{}, err // transient: let Temporal retry
 			}
 			s.Log.Warn("persona LLM unavailable; using playbook line", "conversation_id", conv.ID, "err", err)
