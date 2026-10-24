@@ -1,7 +1,8 @@
-# Local environment (docs/TRD_V3.md §8): PostgreSQL, Redis, Temporal dev server, Buru app.
-# `make up` starts dependencies only; `docker compose --profile app up` also runs the app container.
+# Local environment (docs/TRD.md §8): PostgreSQL, Redis, Temporal dev server, Buru app + dashboard.
+# `make up` starts dependencies only; `docker compose --profile app up` also runs the Go app and the web dashboard.
 services:
   postgres:
+    container_name: postgres
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: buru
@@ -15,6 +16,7 @@ services:
       retries: 20
 
   redis:
+    container_name: redis
     image: redis:7.4-alpine
     ports: ["6379:6379"]
     healthcheck:
@@ -23,6 +25,7 @@ services:
       retries: 20
 
   temporal:
+    container_name: temporal
     image: temporalio/temporal:1.5.1
     # In-memory dev server: workflow history resets on restart.
     command: ["server", "start-dev", "--ip", "0.0.0.0"]
@@ -31,6 +34,7 @@ services:
       - "8233:8233" # Web UI
 
   app:
+    container_name: app
     profiles: [app]
     build: .
     env_file: .env
@@ -43,6 +47,16 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       temporal: { condition: service_started }
+
+  web:
+    container_name: web
+    profiles: [app]
+    build:
+      context: ./web
+      args:
+        BURU_API_URL: http://app:8080 # browser calls /api/*, Next proxies to the app container
+    ports: ["3000:3000"]
+    depends_on: [app]
 
 volumes:
   postgres-data:

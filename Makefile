@@ -1,9 +1,17 @@
 -include .env
 export
 
-MIGRATE_DB := postgres://buru:buru@localhost:5432/buru?sslmode=disable
+# make keeps quotes from .env values; strip them so Go and migrate get a valid URL
+BURU_POSTGRES_URL := $(subst ",,$(BURU_POSTGRES_URL))
+DATABASE_URL := $(subst ",,$(DATABASE_URL))
+
+# migrate-* and test-db use DATABASE_URL from .env (Supabase owner) when set, else local Docker
+LOCAL_DB := postgres://buru:buru@localhost:5432/buru?sslmode=disable
+MIGRATE_DB := $(if $(DATABASE_URL),$(if $(findstring ?,$(DATABASE_URL)),$(DATABASE_URL),$(DATABASE_URL)?sslmode=require),$(LOCAL_DB))
 # sqlc from PATH, else where `go install` puts it
 SQLC := $(or $(shell command -v sqlc),$(shell go env GOPATH)/bin/sqlc)
+# golangci-lint v2 under either name, else where `go install` puts it
+GOLANGCI := $(or $(shell command -v golangci-lint-v2),$(shell command -v golangci-lint),$(shell go env GOPATH)/bin/golangci-lint)
 
 .PHONY: up down migrate-up migrate-down seed keys tglogin tgchat sim sqlc run web test test-db test-e2e lint
 
@@ -14,10 +22,10 @@ down:
 	docker compose down
 
 migrate-up:
-	migrate -path db/migrations -database '$(MIGRATE_DB)' up
+	@migrate -path db/migrations -database '$(MIGRATE_DB)' up # @: never echo the URL (it holds the password)
 
 migrate-down:
-	migrate -path db/migrations -database '$(MIGRATE_DB)' down 1
+	@migrate -path db/migrations -database '$(MIGRATE_DB)' down 1
 
 seed: ## demo operator, playbooks and the four console personas (idempotent)
 	docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U buru -d buru < db/seed/001_demo.sql
@@ -48,12 +56,12 @@ web: ## dashboard on :3000, proxies /api to :8080
 test:
 	go test -race ./...
 
-test-db: ## DB integration tests; needs `make up migrate-up`
-	BURU_TEST_POSTGRES_URL='$(MIGRATE_DB)' go test -count=1 ./internal/db/
+test-db: ## DB integration tests on MIGRATE_DB; writes run in rolled-back transactions
+	@BURU_TEST_POSTGRES_URL='$(MIGRATE_DB)' go test -count=1 ./internal/db/
 
 test-e2e: ## full honeypot loop on local PostgreSQL + Temporal; needs `make up migrate-up`
 	BURU_TEST_POSTGRES_URL='$(MIGRATE_DB)' BURU_TEST_TEMPORAL=localhost:7233 go test -count=1 -v -run TestE2E ./internal/honeypot/
 
 lint:
 	go vet ./...
-	golangci-lint-v2 run ./...
+	$(GOLANGCI) run ./...

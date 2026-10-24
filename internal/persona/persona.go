@@ -54,7 +54,7 @@ func (c *Client) Reply(ctx context.Context, system string, history []Turn) (stri
 	if err != nil {
 		return "", err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	var out struct {
 		Content []struct{ Text string } `json:"content"`
 	}

@@ -4,6 +4,7 @@ import type { NextConfig } from "next";
 const apiURL = process.env.BURU_API_URL ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
+  output: "standalone", // web/Dockerfile runs .next/standalone/server.js
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

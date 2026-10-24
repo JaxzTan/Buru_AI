@@ -59,7 +59,7 @@ func run(log *slog.Logger) error {
 	defer pool.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 
 	tc, err := client.Dial(client.Options{
 		HostPort:  cfg.TemporalHostPort,

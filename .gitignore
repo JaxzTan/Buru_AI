@@ -1,5 +1,4 @@
 .env
-!.env.example
 .secrets/
 /bin/
 /out/
