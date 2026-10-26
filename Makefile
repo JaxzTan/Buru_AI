@@ -47,6 +47,9 @@ sqlc: ## regenerate internal/db from db/migrations + db/queries
 	$(SQLC) generate
 	$(SQLC) vet
 
+stop:
+	docker compose stop
+
 run: up
 	go run ./cmd/buru
 
