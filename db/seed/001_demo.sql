@@ -1,6 +1,6 @@
--- Demo seed for the live honeypot (BURU_MODE=live). Idempotent: safe to run more than once.
+-- Demo seed for the live honeypot (SOCKABUS_MODE=live). Idempotent: safe to run more than once.
 --   make seed
--- Creates: operator #1 (used by BURU_OPERATOR_ID=1), the six scam playbooks (TR-4), and the four
+-- Creates: operator #1 (used by SOCKABUS_OPERATOR_ID=1), the six scam playbooks (TR-4), and the four
 -- personas from the operator console. Auntie Mei is active with a full system prompt; the others
 -- are active with prompts composed from their fields. Accounts are bound with cmd/tglogin.
 

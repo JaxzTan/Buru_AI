@@ -16,7 +16,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Buru AI",
+  title: "Sockabus",
   description: "Scam intelligence network for Southeast Asia",
 };
 

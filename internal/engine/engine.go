@@ -24,7 +24,7 @@ type Engine struct {
 
 func New(st *demostore.Store) *Engine {
 	// PRD FR-3 requires >=10s in production; the demo default is shorter so the pitch moves.
-	return &Engine{St: st, LLM: persona.FromEnv(), DelayMin: secs("BURU_DELAY_MIN", 4), DelayMax: secs("BURU_DELAY_MAX", 9)}
+	return &Engine{St: st, LLM: persona.FromEnv(), DelayMin: secs("SOCKABUS_DELAY_MIN", 4), DelayMax: secs("SOCKABUS_DELAY_MAX", 9)}
 }
 
 func secs(key string, def int) time.Duration {

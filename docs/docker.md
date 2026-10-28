@@ -7,7 +7,7 @@ Docker runs the local development stack. Staging and prod follow [TRD.md](TRD.md
 | File | Purpose |
 |---|---|
 | `docker-compose.yml` | Local stack: 3 dependencies + 2 app containers |
-| `Dockerfile` | Go API image (`cmd/buru`) |
+| `Dockerfile` | Go API image (`cmd/sockabus`) |
 | `web/Dockerfile` | Next.js dashboard image |
 | `.dockerignore`, `web/.dockerignore` | Keep `.env`, `.git`, `node_modules` and `.next` out of builds |
 
@@ -41,7 +41,7 @@ Container names are fixed (`container_name`), so they must be unique on your mac
 ## Images
 
 **Go API (`Dockerfile`)**
-1. `golang:1.26-alpine` builds a static binary from `./cmd/buru`.
+1. `golang:1.26-alpine` builds a static binary from `./cmd/sockabus`.
 2. `gcr.io/distroless/static-debian12:nonroot` runs it: no shell, non-root user, about 49 MB.
 
 **Web (`web/Dockerfile`)**
@@ -49,13 +49,13 @@ Container names are fixed (`container_name`), so they must be unique on your mac
 2. `build`: `pnpm build` with `output: "standalone"` (`web/next.config.ts`).
 3. Runtime: `node:24-alpine` runs `server.js` as the `node` user, about 290 MB.
 
-The Go API address is baked in at build time (`BURU_API_URL` build arg, default `http://app:8080`), because Next.js fixes rewrites during `next build`. Changing it means rebuilding the `web` image.
+The Go API address is baked in at build time (`SOCKABUS_API_URL` build arg, default `http://app:8080`), because Next.js fixes rewrites during `next build`. Changing it means rebuilding the `web` image.
 
 ## Configuration and secrets
 
-- The `app` container reads `.env` through `env_file`, then overrides `BURU_POSTGRES_URL`, `BURU_REDIS_ADDR` and `BURU_TEMPORAL_HOSTPORT` to point at the other containers.
+- The `app` container reads `.env` through `env_file`, then overrides `SOCKABUS_POSTGRES_URL`, `SOCKABUS_REDIS_ADDR` and `SOCKABUS_TEMPORAL_HOSTPORT` to point at the other containers.
 - `.env` is never copied into an image (`.dockerignore`).
-- To run the `app` container against Supabase, remove the `BURU_POSTGRES_URL` override and use the Supabase **Session pooler** URL. The direct host (`db.<ref>.supabase.co`) is IPv6-only, and Docker Desktop cannot reach it.
+- To run the `app` container against Supabase, remove the `SOCKABUS_POSTGRES_URL` override and use the Supabase **Session pooler** URL. The direct host (`db.<ref>.supabase.co`) is IPv6-only, and Docker Desktop cannot reach it.
 
 ## Troubleshooting
 
@@ -63,6 +63,6 @@ The Go API address is baked in at build time (`BURU_API_URL` build arg, default 
 |---|---|---|
 | `container name "/postgres" is already in use` | Another container has that name | `docker rm -f postgres`, or rename in `docker-compose.yml` |
 | `/api/*` returns 500 from `web` | `app` is not running or not healthy | `docker compose logs app` |
-| `/readyz` shows a postgres error | Database not ready or wrong URL | `docker compose ps postgres`; check `BURU_POSTGRES_URL` |
+| `/readyz` shows a postgres error | Database not ready or wrong URL | `docker compose ps postgres`; check `SOCKABUS_POSTGRES_URL` |
 | Web still shows old UI | Image not rebuilt | `docker compose --profile app up -d --build web` |
 | Port already allocated | Something on the host uses 5432, 6379, 8080 or 3000 | Stop it, or change the left side of `ports:` |
