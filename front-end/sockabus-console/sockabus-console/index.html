@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sockabus Console</title>
+  <link rel="icon" type="image/png" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+<div class="app">
+  <aside class="rail" aria-label="Sockabus navigation">
+    <div class="brand"><img src="assets/logo.png" alt="Sockabus mascot"><div><b>Sockabus</b><i></i></div></div>
+    <div class="group caps">Operate</div>
+    <nav class="nav" id="nav-op"></nav>
+    <div class="group caps">Demo</div>
+    <nav class="nav" id="nav-demo"></nav>
+    <div class="spacer"></div>
+    <div class="sys" id="sys" data-testid="sidebar-status"></div>
+    <div class="who">Signed in as operator</div>
+    <div><button class="reset" type="button" data-action="reset" data-testid="reset-demo">Reset demo data</button></div>
+  </aside>
+  <div class="work">
+    <div class="addr">
+      <div class="url mono" aria-label="Page address in the real app"><span class="host">app.sockabus.my</span><span class="addr-path" id="addr-path"></span></div>
+      <span class="badge t-info" title="Every view, selection and filter is kept in the URL, so reload or a shared link opens the same view.">URL = state · reload stays here</span>
+      <span class="proto-tag">Prototype · sample data</span>
+    </div>
+    <div class="path" id="demo-path" aria-label="Demo path"></div>
+    <main id="main" tabindex="-1"></main>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>
