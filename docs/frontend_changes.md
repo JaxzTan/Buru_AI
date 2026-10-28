@@ -1,5 +1,41 @@
 # Frontend Changes
 
+## 2026-10-28 — Sockabus Console replaces the "unknown" dashboard
+
+`web/` now runs the Sockabus Console from `front-end/sockabus-console` (spec: `front-end/Sockabus-Frontend-Spec-v1.1.md`), rebuilt as Next.js pages.
+
+### Routes
+
+| Screen | Route | URL state |
+|---|---|---|
+| S1 Personas | `/personas` | `?status=` `&new=` |
+| S2 Conversations | `/conversations/[id]` | `?status=` |
+| S3 Verify queue | `/verify` | `?selected=` |
+| S4 Entities | `/entities` | `?type=` `&status=` `&q=` |
+| S5 Bank simulator | `/demo/bank` | none |
+| S6 Status | `/status` | none |
+| S7 Web chat | `/demo/chat` | `?persona=` |
+
+`/` redirects to `/personas`. The old `/operator/*` and `/portal/*` pages are removed (customer portal is not v1.0, spec Area 5.3).
+
+### Where things live
+
+| Path | What |
+|---|---|
+| `src/lib/store.ts` | Demo data and every action (generate, verify, lookup…). Each action is one swap point for the Go API |
+| `src/lib/sim.ts` | Stand-ins for backend work: extraction, classification, persona replies, lookup rules |
+| `src/lib/seed.ts` | Sample data and the golden script |
+| `src/lib/hooks.ts` | `useQuery` (URL state), `DEV_CHAT` flag |
+| `src/components/` | Shell (sidebar, demo path, toasts), shared atoms, chat pieces |
+| `src/app/<route>/view.tsx` | One client component per screen |
+
+### Notes
+
+- Data is still sample data kept in the browser (localStorage). "Reset demo data" in the sidebar restores the seed.
+- `NEXT_PUBLIC_DEV_CHAT=false` hides Web chat, the demo path bar, the reset button and the Status "Simulate" toggle. Unset means on.
+- Fonts (Archivo, Archivo Black, JetBrains Mono) are self-hosted in `src/app/fonts/`, so builds don't fetch Google Fonts.
+- Tailwind was removed; styles are the prototype's `styles.css` in `src/app/globals.css`.
+
 ## 2026-10-23 — Removed duplicate HTML frontend
 
 The project had two frontends doing the same job:

@@ -1,93 +1,85 @@
-// Props contract ported from unknown-frontend/src/index.d.ts
-export type EntityType = "bank_account" | "wallet" | "phone" | "url" | "handle";
-export type ScamType = "parcel" | "job" | "investment" | "impersonation" | "romance" | "other";
+// Shapes the console works with. Field names follow the prototype; map from the Go API when it is wired in.
+
+export type PersonaStatus = "draft" | "active" | "paused" | "retired";
+export type ConvoStatus = "bot" | "operator" | "closed";
 export type EntityStatus = "unverified" | "verified" | "rejected";
-export type Stage = "rapport" | "bait" | "payment request" | "stall";
-export type ConvoStatus = "bot" | "human" | "closed";
-export type AccountStatus = "active" | "banned" | "cooldown";
-export type Channel = "TG" | "WA";
-export type Status =
-  | EntityStatus
-  | ConvoStatus
-  | AccountStatus
-  | "match"
-  | "clear"
-  | "revoked";
-
-export interface Entity {
-  id: number;
-  type: EntityType;
-  value: string;
-  display?: string;
-  bank?: string;
-  scam_type: ScamType;
-  confidence: number;
-  sightings: number;
-  last_seen: string;
-  first_seen: string;
-  status: EntityStatus;
-  convo: string;
-}
-
-export interface Message {
-  dir: "in" | "out" | "system";
-  text: string;
-  time?: string;
-  human?: boolean;
-  entities?: string[];
-}
-
-export interface Conversation {
-  id: string;
-  scammer: string;
-  persona: string;
-  channel: Channel;
-  scam: ScamType;
-  stage: Stage;
-  status: ConvoStatus;
-  time: string;
-  stuck?: boolean;
-  msgs: Message[];
-}
+export type Confidence = "low" | "medium" | "high";
+export type EntityType = "bank_account" | "wallet" | "phone" | "url" | "handle";
+export type ScamType = "parcel" | "job" | "investment" | "impersonation" | "romance" | "loan" | "other";
+export type AvatarTone = "mustard" | "blue" | "green" | "neutral";
+export type Sender = "scammer" | "persona" | "operator";
 
 export interface Persona {
   id: string;
   name: string;
   age: number;
-  backstory: string;
-  languages: string[];
-  wealth: string;
-  playbooks: ScamType[];
-}
-
-export interface HoneypotAccount {
-  id: string;
-  channel: Channel;
+  loc: string;
+  occ: string;
+  langs: string[];
+  status: PersonaStatus;
   handle: string;
-  persona: string;
-  status: AccountStatus;
-  chats: number;
+  created: string;
+  backstory: string;
+  wealth: string;
+  av: AvatarTone;
+  gen?: boolean; // made with "Generate persona" in this session (drives the demo path)
+}
+
+export interface Message {
+  who: Sender;
+  text: string;
+  t: string;
+}
+
+export interface Conversation {
+  id: string;
+  scammer: string;
+  personaId: string;
+  scam: ScamType;
+  status: ConvoStatus;
+  stage: number; // index into STAGES
   last: string;
-  age: string;
+  msgs: Message[];
+  web?: boolean; // started from the web chat page instead of Telegram
 }
 
-export interface Playbook {
-  id: ScamType;
-  reach: number[];
-  /** [stage name, persona goal, example line] */
-  stages: [string, string, string][];
+export interface Entity {
+  id: string;
+  type: EntityType;
+  bank: string; // bank code for accounts, chain for wallets, "" otherwise
+  value: string;
+  scam: ScamType;
+  status: EntityStatus;
+  conf: Confidence;
+  sightings: number;
+  first: string;
+  convoId: string | null;
+  stageAt?: number;
+  sample: boolean; // seeded row, always labelled SAMPLE
+  note?: string;
 }
 
-export interface LookupResultData {
+export type LookupResult = "held" | "warn" | "sent";
+
+export interface LookupResponse {
   match: boolean;
-  confidence?: "high" | "medium" | "low";
+  confidence?: Confidence;
   scam_types?: ScamType[];
   first_seen?: string;
-  last_seen?: string;
   sightings?: number;
 }
 
-export interface Datum {
-  k: string;
-  v: number;
+export interface Lookup {
+  result: LookupResult;
+  entityId: string | null;
+  res: LookupResponse;
+  bank: string;
+  amt: string;
+  ms: number;
+}
+
+export interface BankDraft {
+  bank: string;
+  acct: string;
+  amt: string;
 }

@@ -7,19 +7,8 @@ const nextConfig: NextConfig = {
   output: "standalone", // web/Dockerfile runs .next/standalone/server.js
   cacheComponents: true,
   partialPrefetching: true,
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
   redirects() {
-    return [
-      { source: "/operator", destination: "/operator/overview", permanent: false },
-      { source: "/portal", destination: "/portal/lookup", permanent: false },
-    ];
+    return [{ source: "/", destination: "/personas", permanent: false }];
   },
   rewrites() {
     return [{ source: "/api/:path*", destination: `${apiURL}/:path*` }];
