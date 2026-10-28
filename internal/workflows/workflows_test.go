@@ -9,7 +9,7 @@ import (
 func TestPing(t *testing.T) {
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
-	env.ExecuteWorkflow(Ping, "buru")
+	env.ExecuteWorkflow(Ping, "sockabus")
 
 	if !env.IsWorkflowCompleted() {
 		t.Fatal("workflow did not complete")
@@ -18,7 +18,7 @@ func TestPing(t *testing.T) {
 	if err := env.GetWorkflowResult(&got); err != nil {
 		t.Fatal(err)
 	}
-	if got != "pong buru" {
+	if got != "pong sockabus" {
 		t.Fatalf("result = %q", got)
 	}
 }

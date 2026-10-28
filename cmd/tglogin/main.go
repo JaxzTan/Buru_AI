@@ -5,10 +5,10 @@
 //	go run ./cmd/tglogin -phone +60123456789               # log in, write the session file
 //	go run ./cmd/tglogin -phone +60123456789 -persona 1    # ...and bind it to persona 1 in PostgreSQL
 //
-// With BURU_TG_TEST_DC=2 it uses Telegram's test network instead (numbers 99966 2 XXXX, code 22222).
+// With SOCKABUS_TG_TEST_DC=2 it uses Telegram's test network instead (numbers 99966 2 XXXX, code 22222).
 //
 // Session files are secrets (they are a logged-in Telegram account). They are written with 0600
-// permissions to BURU_TG_SESSION_DIR, which is git-ignored. Never commit or share them.
+// permissions to SOCKABUS_TG_SESSION_DIR, which is git-ignored. Never commit or share them.
 package main
 
 import (
@@ -38,10 +38,10 @@ func main() {
 func run() error {
 	phone := flag.String("phone", "", "honeypot phone number: +60123456789, or 99966XYYYY on the test network")
 	personaID := flag.Int64("persona", 0, "optional: persona id to bind this account to (inserts into honeypot_accounts)")
-	dir := flag.String("session-dir", getenv("BURU_TG_SESSION_DIR", ".secrets/telegram"), "where to store the session file")
+	dir := flag.String("session-dir", getenv("SOCKABUS_TG_SESSION_DIR", ".secrets/telegram"), "where to store the session file")
 	flag.Parse()
 	if *phone == "" {
-		return errors.New("-phone is required, e.g. -phone +60123456789 (or 9996621234 with BURU_TG_TEST_DC=2)")
+		return errors.New("-phone is required, e.g. -phone +60123456789 (or 9996621234 with SOCKABUS_TG_TEST_DC=2)")
 	}
 	cfg, err := loginConfig(*phone, *dir)
 	if err != nil {
@@ -78,29 +78,29 @@ func run() error {
 }
 
 func loginConfig(phone, dir string) (tgconn.LoginConfig, error) {
-	appID, _ := strconv.Atoi(os.Getenv("BURU_TG_APP_ID"))
+	appID, _ := strconv.Atoi(os.Getenv("SOCKABUS_TG_APP_ID"))
 	testDC := 0
-	if v := os.Getenv("BURU_TG_TEST_DC"); v != "" {
+	if v := os.Getenv("SOCKABUS_TG_TEST_DC"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			return tgconn.LoginConfig{}, fmt.Errorf("BURU_TG_TEST_DC must be 1, 2 or 3")
+			return tgconn.LoginConfig{}, fmt.Errorf("SOCKABUS_TG_TEST_DC must be 1, 2 or 3")
 		}
 		testDC = n
 	}
 	device := tgconn.DefaultDevice()
-	if v := os.Getenv("BURU_TG_DEVICE_MODEL"); v != "" {
+	if v := os.Getenv("SOCKABUS_TG_DEVICE_MODEL"); v != "" {
 		device.DeviceModel = v
 	}
-	if v := os.Getenv("BURU_TG_SYSTEM_VERSION"); v != "" {
+	if v := os.Getenv("SOCKABUS_TG_SYSTEM_VERSION"); v != "" {
 		device.SystemVersion = v
 	}
-	return tgconn.LoginConfig{AppID: appID, AppHash: os.Getenv("BURU_TG_APP_HASH"), SessionDir: dir, Phone: phone,
+	return tgconn.LoginConfig{AppID: appID, AppHash: os.Getenv("SOCKABUS_TG_APP_HASH"), SessionDir: dir, Phone: phone,
 		TestDC: testDC, Device: device}, nil
 }
 
 // personaName looks up the persona's name for a new test account (best effort).
 func personaName(id int64) string {
-	url := os.Getenv("BURU_POSTGRES_URL")
+	url := os.Getenv("SOCKABUS_POSTGRES_URL")
 	if url == "" {
 		return ""
 	}
@@ -119,9 +119,9 @@ func personaName(id int64) string {
 }
 
 func bind(ctx context.Context, personaID int64, phone, ref string) error {
-	url := os.Getenv("BURU_POSTGRES_URL")
+	url := os.Getenv("SOCKABUS_POSTGRES_URL")
 	if url == "" {
-		return errors.New("BURU_POSTGRES_URL is not set; cannot bind the account")
+		return errors.New("SOCKABUS_POSTGRES_URL is not set; cannot bind the account")
 	}
 	pool, err := pgxpool.New(ctx, url)
 	if err != nil {

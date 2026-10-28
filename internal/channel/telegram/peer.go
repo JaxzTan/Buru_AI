@@ -35,7 +35,7 @@ func ParsePeerRef(ref string) (*tg.InputPeerUser, error) {
 var reSessionName = regexp.MustCompile(`^[A-Za-z0-9_.-]+\.json$`)
 
 // SessionRef is the honeypot_accounts.session_ref for a phone: "file:tg_<digits>.json".
-// The session file itself lives in BURU_TG_SESSION_DIR and must never be committed (TRD §7).
+// The session file itself lives in SOCKABUS_TG_SESSION_DIR and must never be committed (TRD §7).
 func SessionRef(phone string) string {
 	var b strings.Builder
 	for _, r := range phone {

@@ -1,7 +1,7 @@
-// Command buru runs the modular monolith: HTTP API plus the Temporal worker.
+// Command sockabus runs the modular monolith: HTTP API plus the Temporal worker.
 //
-// BURU_MODE=demo (default) serves the in-memory pitch demo with the scripted scammer simulator.
-// BURU_MODE=live runs the real honeypot: Telegram connector → conversation workflows → persona LLM,
+// SOCKABUS_MODE=demo (default) serves the in-memory pitch demo with the scripted scammer simulator.
+// SOCKABUS_MODE=live runs the real honeypot: Telegram connector → conversation workflows → persona LLM,
 // with everything stored in PostgreSQL.
 package main
 
@@ -142,7 +142,7 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 	senders := gateway.NewRegistry()
 	timing := workflows.Timing{ReadMin: l.ReplyReadMin, ReadMax: l.ReplyReadMax, CharsPerSecond: l.TypingCPS, Inactivity: l.Inactivity}
 	if timing.ReadMin < workflows.MinReplyDelay {
-		log.Warn("BURU_REPLY_READ_MIN below the FR-3 floor; replies still wait at least 10s", "configured", timing.ReadMin)
+		log.Warn("SOCKABUS_REPLY_READ_MIN below the FR-3 floor; replies still wait at least 10s", "configured", timing.ReadMin)
 	}
 	svc := honeypot.NewService(pool, box, personaLLM, extractLLM, tc, senders,
 		honeypot.Config{TaskQueue: cfg.TemporalTaskQueue, Timing: timing}, log)
@@ -196,7 +196,7 @@ func wireLive(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, tc cli
 		}
 		log.Info("telegram connector ready", "accounts", len(accts), "only_from", l.TelegramOnlyFrom, "test_dc", l.TelegramTestDC)
 	} else {
-		log.Warn("BURU_TG_APP_ID / BURU_TG_APP_HASH not set: Telegram connector disabled")
+		log.Warn("SOCKABUS_TG_APP_ID / SOCKABUS_TG_APP_HASH not set: Telegram connector disabled")
 	}
 
 	srv.WithLive(svc, connect, l.OperatorToken, l.OperatorID)

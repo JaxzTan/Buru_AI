@@ -1,4 +1,4 @@
-# Local environment (docs/TRD.md §8): PostgreSQL, Redis, Temporal dev server, Buru app + dashboard.
+# Local environment (docs/TRD.md §8): PostgreSQL, Redis, Temporal dev server, Sockabus app + dashboard.
 # `make up` starts dependencies only; `docker compose --profile app up` also runs the Go app and the web dashboard.
 services:
   postgres:
@@ -39,9 +39,9 @@ services:
     build: .
     env_file: .env
     environment:
-      BURU_POSTGRES_URL: postgres://buru:buru@postgres:5432/buru?sslmode=disable
-      BURU_REDIS_ADDR: redis:6379
-      BURU_TEMPORAL_HOSTPORT: temporal:7233
+      SOCKABUS_POSTGRES_URL: postgres://buru:buru@postgres:5432/buru?sslmode=disable
+      SOCKABUS_REDIS_ADDR: redis:6379
+      SOCKABUS_TEMPORAL_HOSTPORT: temporal:7233
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -54,7 +54,7 @@ services:
     build:
       context: ./web
       args:
-        BURU_API_URL: http://app:8080 # browser calls /api/*, Next proxies to the app container
+        SOCKABUS_API_URL: http://app:8080 # browser calls /api/*, Next proxies to the app container
     ports: ["3000:3000"]
     depends_on: [app]
 

@@ -1,6 +1,6 @@
 // Package msgcrypt encrypts message bodies at rest (NFR-4, TR-14).
 //
-// MVP scheme: AES-256-GCM with a single key from BURU_MESSAGE_KEY; messages.dek_ref records which
+// MVP scheme: AES-256-GCM with a single key from SOCKABUS_MESSAGE_KEY; messages.dek_ref records which
 // key sealed the row ("local:v1") so a later move to per-conversation data keys wrapped by a KMS
 // (full envelope encryption, TR-14 in M3) can decrypt old rows. Ciphertext layout: nonce || sealed.
 package msgcrypt
@@ -24,7 +24,7 @@ type Box struct {
 // New builds a Box from a base64-encoded 32-byte key (generate with: openssl rand -base64 32).
 func New(b64Key string) (*Box, error) {
 	if b64Key == "" {
-		return nil, errors.New("msgcrypt: BURU_MESSAGE_KEY is required in live mode (openssl rand -base64 32)")
+		return nil, errors.New("msgcrypt: SOCKABUS_MESSAGE_KEY is required in live mode (openssl rand -base64 32)")
 	}
 	key, err := base64.StdEncoding.DecodeString(b64Key)
 	if err != nil {

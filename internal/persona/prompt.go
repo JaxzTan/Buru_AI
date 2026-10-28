@@ -118,7 +118,7 @@ func SystemPrompt(p Profile, s Situation) string {
 var (
 	// Admissions and setup leaks only. Denials ("i'm not a bot la") and scam vocabulary the persona
 	// legitimately echoes ("the investigator say...") are allowed.
-	reLeak = regexp.MustCompile(`(?i)\b(as an ai|i(?: a|')m an ai|i am a bot|i'm a bot|ai assistant|language model|chatgpt|openai|gemini|claude|anthropic|system prompt|my instructions|my prompt|honeypot|buru|i am programmed|role-?play(?:ing)?)\b`)
+	reLeak = regexp.MustCompile(`(?i)\b(as an ai|i(?: a|')m an ai|i am a bot|i'm a bot|ai assistant|language model|chatgpt|openai|gemini|claude|anthropic|system prompt|my instructions|my prompt|honeypot|sockabus|buru|i am programmed|role-?play(?:ing)?)\b`)
 	// Six or more digits in a row (or OTP-like groups) must never leave the persona.
 	reLongDigits = regexp.MustCompile(`\d(?:[\s-]?\d){5,}`)
 	reMarkdown   = strings.NewReplacer("**", "", "__", "", "`", "")

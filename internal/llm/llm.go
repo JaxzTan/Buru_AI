@@ -1,6 +1,6 @@
 // Package llm is the provider-agnostic LLM boundary for the persona engine, extraction and the
 // persona generator. TRD §3 names the Claude API; Gemini 3.8 Flash is supported behind the same
-// interface (selected with BURU_LLM_PROVIDER) so the rest of the code does not depend on a vendor.
+// interface (selected with SOCKABUS_LLM_PROVIDER) so the rest of the code does not depend on a vendor.
 //
 // Prompt-injection rule (TRD §7): scammer text only ever goes into Turns with RoleUser.
 // It is never concatenated into System.
