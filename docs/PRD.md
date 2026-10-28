@@ -6,7 +6,7 @@
 | Status | Baseline for v1.0 build |
 | Version | 1.0 |
 | Last updated | 26 Oct 2026 |
-| Related | [TRD.md](TRD.md) · [buru-ai-v1-blueprint.md](buru-ai-v1-blueprint.md) · [buru-ai-v1-tasks.md](buru-ai-v1-tasks.md) |
+| Related | [TRD.md](TRD.md) · [sockabus-v1-blueprint.md](sockabus-v1-blueprint.md) · [sockabus-v1-tasks.md](sockabus-v1-tasks.md) |
 
 **Revision history**
 
@@ -15,6 +15,7 @@
 | 0.1 | 21 Oct 2026 | First draft. |
 | 0.2 | 23 Oct 2026 | Aligned with TRD 0.3: confidence levels, "loan" scam type, batch lookup, persona lifecycle, Hokkien, tamper-proof audit, retention, Telegram-first decided. |
 | 1.0 | 26 Oct 2026 | Renamed to Buru AI. Added §10 v1.0 release (bank demo, 2 Nov 2026). Added FR-15 one-click persona generation, NFR-9 monitoring, NFR-10 automated testing, NFR-11 deployment. Telegram fallback decision recorded. |
+| 1.0.1 | 28 Oct 2026 | Renamed to Sockabus. |
 
 ## 1. Problem statement
 
@@ -46,7 +47,7 @@ Scam syndicates in Southeast Asia run industrial-scale operations through WhatsA
 |---|---|---|
 | **Farah — Fraud analyst, digital bank / e-wallet** | Reviews suspicious transfers daily; blocklists are stale. | Real-time check: "Is this recipient account linked to a scam?" |
 | **Wei Ming — Risk lead, crypto exchange** | Sees deposits from scam victims and withdrawals to scam wallets. | Wallet addresses and fund-flow evidence tied to known scams. |
-| **Operator (internal)** | Sockabus staff running personas and honeypots. | Monitor conversations, intervene, verify extracted data. |
+| **Operator (internal)** | Sockabus staff running personas and honeypots. | Create personas fast, monitor conversations, intervene, verify extracted data, know immediately when the bot is down. |
 
 ## 5. User stories & functional requirements
 

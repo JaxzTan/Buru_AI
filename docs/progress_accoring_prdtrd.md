@@ -1,4 +1,4 @@
-# Progress: Buru AI against PRD v1.0 and TRD v1.0
+# Progress: Sockabus against PRD v1.0 and TRD v1.0
 
 | Field | Value |
 |---|---|
@@ -26,7 +26,7 @@ TRD v1.0 §12 says two things that the code contradicts:
 
 | Gap | TRD v1.0 says | Code on `dev` |
 |---|---|---|
-| G-11 | "Chat runs through a CLI; no Telegram connection" | gotd connector exists (`internal/channel/telegram`), is wired in `cmd/buru/main.go` when `BURU_TG_APP_ID` is set, and has a login tool (`make tglogin`) and test-network tool (`make tgchat`) |
+| G-11 | "Chat runs through a CLI; no Telegram connection" | gotd connector exists (`internal/channel/telegram`), is wired in `cmd/sockabus/main.go` when `SOCKABUS_TG_APP_ID` is set, and has a login tool (`make tglogin`) and test-network tool (`make tgchat`) |
 | G-12 | "No backend endpoint or button" | `POST /internal/personas/generate` exists (`internal/server/live.go:42`, `internal/persona/generator.go`). No dashboard button |
 
 Whether the connector works against a real Telegram account has not been checked. The G-13 audit should confirm both rows, then either the TRD or this file gets corrected.

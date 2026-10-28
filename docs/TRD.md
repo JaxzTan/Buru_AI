@@ -6,7 +6,7 @@
 | Status | Baseline for v1.0 build |
 | Version | 1.0 |
 | Last updated | 26 Oct 2026 |
-| Related | [PRD.md](PRD.md) · [buru-ai-v1-blueprint.md](buru-ai-v1-blueprint.md) · [buru-ai-v1-tasks.md](buru-ai-v1-tasks.md) |
+| Related | [PRD.md](PRD.md) · [sockabus-v1-blueprint.md](sockabus-v1-blueprint.md) · [sockabus-v1-tasks.md](sockabus-v1-tasks.md) |
 
 **Revision history**
 
@@ -20,7 +20,7 @@
 
 ## 1. Overview & scope
 
-Sockabus is a Go backend that runs multilingual AI personas on honeypot messaging accounts, extracts scam entities (bank accounts, wallets, phone numbers, URLs) from conversations, traces crypto wallets on-chain, and serves verified intelligence to banks, e-wallets and exchanges through a low-latency lookup API, webhooks and a dashboard. This TRD covers all PRD Must and Should requirements (FR-1 to FR-13, NFR-1 to NFR-8). FR-14 (evidence reports), voice, and telco call diversion are deferred.
+Sockabus is a Go backend that runs multilingual AI personas on honeypot messaging accounts, extracts scam entities (bank accounts, wallets, phone numbers, URLs) from conversations, traces crypto wallets on-chain, and serves verified intelligence to banks, e-wallets and exchanges through a low-latency lookup API, webhooks and a dashboard. This TRD covers all PRD Must and Should requirements (FR-1 to FR-13, FR-15, NFR-1 to NFR-11). FR-14 (evidence reports), voice, and telco call diversion are deferred. **§13 defines what ships in v1.0.**
 
 ## 2. Architecture
 
@@ -102,8 +102,8 @@ flowchart TB
 | Migrations | golang-migrate | Versioned up/down SQL files; same folder is sqlc's schema source. | Atlas |
 | Cache | Redis | Lookup API hot cache; rate limiting. | In-memory only |
 | Queue | Temporal task queues (MVP); Kafka later | Avoid extra infra until volume justifies it. | Kafka from day one |
-| LLM | Provider interface (`internal/llm`). Default: Gemini 3.8 Flash (`gemini-3.8-flash`, thinking level low) for personas and extraction; Claude API supported via `SOCKABUS_LLM_PROVIDER=anthropic` | Swap providers by config; personas, extraction and the persona generator never call a vendor SDK directly. | Self-hosted open model |
-| Telegram | gotd/td (Go MTProto client) | User accounts behave like real people, unlike bots. | Bot API (scammers ignore bots) |
+| LLM | Provider interface (`internal/llm`). Default: Gemini 3.8 Flash (`gemini-3.8-flash`, thinking level low); Claude via `SOCKABUS_LLM_PROVIDER=anthropic`; `fake` provider with fixed replies for tests (`SOCKABUS_LLM_PROVIDER=fake`) | Swap providers by config; nothing calls a vendor SDK directly; tests are deterministic and free. | Self-hosted open model |
+| Telegram | gotd/td (Go MTProto client) | User accounts behave like real people, unlike bots. Needs `api_id` + `api_hash` from my.telegram.org per account. | Bot API (scammers ignore bots) |
 | WhatsApp | whatsmeow (Go) | Only practical Go option for personal accounts. | Official Business API (not suitable for personas) |
 | Chain data | TronGrid + Etherscan APIs | USDT on TRON is dominant in SEA scams. | Paid analytics provider |
 | Frontend | Next.js + Tailwind (existing operator dashboard) | Fast to build. Talks only to the Go API, never directly to the database. | Plain React |
@@ -183,7 +183,7 @@ npx @dbml/cli db2dbml postgres "$DATABASE_URL" -o db/schema.dbml
 | GET | `/internal/entities` | List entities with filters | Operator | FR-9, FR-11 | ✅ |
 | POST | `/internal/entities/{id}/verify` | Verify / reject entity | Operator | FR-9 | ✅ |
 | WS | `/internal/live` | Live stream (`message.new`, `entity.extracted`) | Operator | FR-5, FR-9 | ⚠ polling acceptable in v1.0 |
-| POST | `/internal/dev/inject` | Inject a scammer message into the gateway (web chat + tests) | Operator, only when `BURU_DEV_INJECT=true` | TR-22 | ✅ |
+| POST | `/internal/dev/inject` | Inject a scammer message into the gateway (web chat + tests) | Operator, only when `SOCKABUS_DEV_INJECT=true` | TR-22 | ✅ |
 | POST | `/v1/lookup` | Check one entity | API key (v1.0: shared token) | FR-10 | ✅ |
 | POST | `/v1/lookup/batch` | Check up to 100 entities | API key | FR-10 | ❌ |
 | GET | `/v1/entities` | List/filter entities, CSV export | Customer session | FR-11 | ❌ |
@@ -265,8 +265,8 @@ All v1.0 endpoints are specified in `api/openapi.yaml`; the mock server is gener
 | TR-18 | Legal review checklist recorded before customer pilot. | NFR-5 | Non-code gate for M3. |
 | TR-19 | Persona generator: `POST /internal/personas/generate` calls the LLM provider with the persona-generator prompt and JSON schema (ported from the persona skill into `internal/persona/generator`), validates the output, stores a `draft` persona + prompt version 1. Randomness from seeded attributes (age band, state, language mix, scam-type hint) chosen in Go before the LLM call, so each click differs. | FR-15 | Output validated against schema; invalid output retried once, then 502. Never includes real identifiers. |
 | TR-20 | Monitoring: `/healthz` checks DB, Redis, Temporal; Telegram connector pushes a heartbeat to Uptime Kuma every 60 s while connected; Kuma HTTP monitors on `/healthz`, `/v1/lookup` (synthetic request) and the dashboard; alerts to the team Telegram group/email; `/internal/status` feeds a dashboard status page. | NFR-9, TR-16, TR-17 | Alert within 2 min = heartbeat interval 60 s + 1 retry. |
-| TR-21 | Automated tests in CI: Go unit tests, Playwright API tests and Playwright UI tests run on every pull request in GitHub Actions against the Docker Compose stack with `BURU_LLM_PROVIDER=fake`; branch protection blocks merging on failure. | NFR-10 | See §9 for layers and test cases. |
-| TR-22 | Web chat channel: a page in the dashboard that sends messages through `/internal/dev/inject` and shows persona replies. Acts as the demo fallback and the test entry point. Enabled only when `BURU_DEV_INJECT=true`. | FR-2, NFR-10 | Decision point for using it in the demo: Fri 30 Oct 12:00. |
+| TR-21 | Automated tests in CI: Go unit tests, Playwright API tests and Playwright UI tests run on every pull request in GitHub Actions against the Docker Compose stack with `SOCKABUS_LLM_PROVIDER=fake`; branch protection blocks merging on failure. | NFR-10 | See §9 for layers and test cases. |
+| TR-22 | Web chat channel: a page in the dashboard that sends messages through `/internal/dev/inject` and shows persona replies. Acts as the demo fallback and the test entry point. Enabled only when `SOCKABUS_DEV_INJECT=true`. | FR-2, NFR-10 | Decision point for using it in the demo: Fri 30 Oct 12:00. |
 | TR-23 | Deployment: one VPS runs the full Compose stack (app, PostgreSQL, Redis, Temporal, dashboard, Caddy, Uptime Kuma); `make deploy` (or a manual GitHub Actions workflow) pulls `main`, runs migrations, restarts containers; secrets in a `.env` on the server only. | NFR-11 | Daily PostgreSQL dump to off-server storage. |
 
 ## 7. Security & compliance
@@ -274,7 +274,7 @@ All v1.0 endpoints are specified in `api/openapi.yaml`; the mock server is gener
 - **Auth:** target is operators with email + TOTP and role-based access, customers with hashed API keys plus dashboard login. v1.0 uses a single operator bearer token (G-7); the dashboard and API are not shared with anyone outside the team.
 - **Secrets:** channel session files, LLM keys, Telegram `api_id`/`api_hash` and chain API keys kept in a secret manager (or `.env` on the VPS only for v1.0), never in the repo.
 - **Input validation:** all customer inputs validated and normalised; scammer messages are treated as untrusted. Prompt-injection guardrails stop scammer text from changing persona instructions or leaking system details. All database access goes through sqlc-generated parameterised queries, or a parameterised builder (e.g. squirrel) for dynamic dashboard filters; string-built SQL is not allowed.
-- **Dev endpoints:** `/internal/dev/inject` is disabled unless `BURU_DEV_INJECT=true` and always requires the operator token.
+- **Dev endpoints:** `/internal/dev/inject` is disabled unless `SOCKABUS_DEV_INJECT=true` and always requires the operator token.
 - **Append-only enforcement:** the application's database role has INSERT and SELECT only on `messages`, `entity_sightings` and `verifications`; triggers block UPDATE/DELETE.
 - **Rate limiting:** per API key in Redis; webhook endpoints signed with HMAC.
 - **Data stored:** conversations, scammer identifiers, mule account numbers, wallets. Encrypted at rest; retention 24 months for entities, 12 months for raw messages (to confirm with legal).
@@ -286,7 +286,7 @@ All v1.0 endpoints are specified in `api/openapi.yaml`; the mock server is gener
 
 | Environment | Setup |
 |---|---|
-| Local | Docker Compose: Go app, PostgreSQL, Redis, Temporal dev server, dashboard; `BURU_LLM_PROVIDER=fake` by default, live provider optional. |
+| Local | Docker Compose: Go app, PostgreSQL, Redis, Temporal dev server, dashboard; `SOCKABUS_LLM_PROVIDER=fake` by default, live provider optional. |
 | CI | GitHub Actions: same Compose stack, fake LLM, all tests (§9). |
 | Prod (v1.0) | One VPS (SG/MY): Compose stack + Caddy (HTTPS) + Uptime Kuma. Temporal self-hosted in Compose. Live LLM provider. Staging environment and Temporal Cloud after v1.0. |
 
@@ -313,12 +313,12 @@ All v1.0 endpoints are specified in `api/openapi.yaml`; the mock server is gener
 | Prompt injection | Adversarial scammer messages | Persona must not break or leak instructions | Manual, before demo |
 
 **Rules**
-- CI uses `BURU_LLM_PROVIDER=fake`; tests assert on structure (reply exists, entity extracted, status changed), never on exact LLM wording.
-- Reply delay is shortened by config in CI (`BURU_REPLY_DELAY_MIN=0`).
+- CI uses `SOCKABUS_LLM_PROVIDER=fake`; tests assert on structure (reply exists, entity extracted, status changed), never on exact LLM wording.
+- Reply delay is shortened by config in CI (`SOCKABUS_REPLY_DELAY_MIN=0`).
 - UI elements used by tests carry agreed `data-testid` attributes (list in the blueprint); a screen is not done until they exist.
 - Telegram itself is not automated; the web chat channel exercises the same gateway path.
 
-**Demo-path test cases** — the full list with IDs (TC-1 to TC-22) lives in [buru-ai-v1-blueprint.md](buru-ai-v1-blueprint.md) §8.
+**Demo-path test cases** — the full list with IDs (TC-1 to TC-22) lives in [sockabus-v1-blueprint.md](sockabus-v1-blueprint.md) §8.
 
 ## 10. Risks & mitigations
 
@@ -353,16 +353,32 @@ All v1.0 endpoints are specified in `api/openapi.yaml`; the mock server is gener
 | 13 | Chain tracer, customer dashboard, webhooks (TR-8, TR-11, TR-12) | L | M4 |
 | 14 | WhatsApp connector, account health automation (TR-17) | M | M4 |
 
-**Critical path for v1.0:** 2 → (5, 6 verified) → 7 → demo rehearsal. **Day-by-day plan and owners:** [buru-ai-v1-tasks.md](buru-ai-v1-tasks.md).
+**Critical path for v1.0:** 2 → (5, 6 verified) → 7 → demo rehearsal. **Day-by-day plan and owners:** [sockabus-v1-tasks.md](sockabus-v1-tasks.md).
 
 ## 12. Open implementation gaps (doc ahead of code)
 
 This section tracks where the code still differs from this TRD. Delete each row once it is done.
 
-| # | Gap | Current code | Target | Done when |
-|---|---|---|---|---|
-| G-6 | Schema diagram | `db/schema.dbml` hand-copied from design | Regenerated from real migrations with `db2dbml` | File matches applied migrations |
-| G-7 | Operator auth | Live operator API and `/v1/lookup` use one bearer token (`SOCKABUS_OPERATOR_TOKEN`) mapped to `SOCKABUS_OPERATOR_ID` | Operators: email + TOTP with roles; customers: hashed API keys (FR-13, M3) | Token removed |
-| G-8 | Envelope encryption | AES-256-GCM with one key from `SOCKABUS_MESSAGE_KEY`; `dek_ref = local:v1` | Per-conversation data keys wrapped by a KMS (TR-14, M3) | Rows re-encrypted or readable under both refs |
-| G-9 | Telegram update state | gotd update state and access hashes are in memory; messages sent while the app is down are not replayed | Persistent state storage per account (e.g. bbolt or PostgreSQL) | Restart replays missed messages |
-| G-10 | Account health | Connector stops an account on `AUTH_KEY_UNREGISTERED` / `USER_DEACTIVATED*` and logs it | TR-17: set status `banned`/`cooldown` and alert the operator (M4) | Status changes automatically |
+| # | Gap | Current code | Target | In v1.0? | Done when |
+|---|---|---|---|---|---|
+| G-6 | Schema diagram | `db/schema.dbml` hand-copied from design | Regenerated from real migrations with `db2dbml` | ✅ | File matches applied migrations |
+| G-7 | Operator / customer auth | One bearer token (`SOCKABUS_OPERATOR_TOKEN`) mapped to `SOCKABUS_OPERATOR_ID` for operator API and `/v1/lookup` | Operators: email + TOTP with roles; customers: hashed API keys | ❌ | Token removed |
+| G-8 | Envelope encryption | AES-256-GCM with one key from `SOCKABUS_MESSAGE_KEY`; `dek_ref = local:v1` | Per-conversation data keys wrapped by a KMS | ❌ | Rows re-encrypted or readable under both refs |
+| G-9 | Telegram update state | gotd update state and access hashes in memory; messages sent while the app is down are not replayed | Persistent state per account (bbolt or PostgreSQL) | ⚠ nice-to-have | Restart replays missed messages |
+| G-10 | Account health | (Planned) connector stops on `AUTH_KEY_UNREGISTERED` / `USER_DEACTIVATED*` and logs it | Set status `banned`/`cooldown` and alert operator | ⚠ alert only via heartbeat | Status changes automatically |
+| G-11 | Telegram connector | Chat runs through a CLI; no Telegram connection | gotd connector live: receive, route to persona, reply with delays | ✅ (fallback: web chat) | A message to the honeypot number gets a persona reply |
+| G-12 | Persona generation | Persona generator exists as a Claude skill; no backend endpoint or button | TR-19 endpoint + dashboard button | ✅ | Button creates a draft persona in < 30 s |
+| G-13 | Unconfirmed state | Extraction, verify endpoint and `/v1/lookup` not confirmed working end-to-end | Audit on Mon 26 Oct: each marked works / half / missing | ✅ | Audit result recorded in the tasks file |
+
+## 13. v1.0 release — bank demo (2 Nov 2026)
+
+**In v1.0:** Telegram connector (or web chat fallback), persona auto-reply, persona generation button, takeover, extraction + classification, verification queue, entity list (basic), single `/v1/lookup` with shared token, bank simulator page, status page, Uptime Kuma monitoring + alerts, automated tests in CI, deployment on one VPS.
+
+**Not in v1.0:** chain tracer (FR-8), webhooks (FR-12), evidence reports (FR-14), WhatsApp, batch lookup, per-customer API keys, TOTP login (G-7), KMS encryption (G-8), Prometheus/Grafana, load testing.
+
+**Release criteria (all must be true on Sun 1 Nov):**
+1. All demo-path test cases (blueprint §8) pass in CI.
+2. Full demo rehearsed twice on the deployed server without manual fixes.
+3. Uptime Kuma shows all monitors green for 24 h, and a forced bot stop triggers an alert within 2 min.
+4. Database backup taken and restore tested once.
+5. Repo tagged `v1.0.0`.
