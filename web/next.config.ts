@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
-// Go API (cmd/buru). Browser calls /api/* and Next proxies them, so no CORS in dev.
-const apiURL = process.env.BURU_API_URL ?? "http://localhost:8080";
+// Go API (cmd/sockabus). Browser calls /api/* and Next proxies them, so no CORS in dev.
+const apiURL = process.env.SOCKABUS_API_URL ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
   output: "standalone", // web/Dockerfile runs .next/standalone/server.js

@@ -25,7 +25,7 @@ func ApplyNetwork(opts *telegram.Options, testDC int) error {
 		return nil
 	}
 	if testDC < 1 || testDC > 3 {
-		return fmt.Errorf("telegram: BURU_TG_TEST_DC must be 1, 2 or 3, got %d", testDC)
+		return fmt.Errorf("telegram: SOCKABUS_TG_TEST_DC must be 1, 2 or 3, got %d", testDC)
 	}
 	opts.DC = testDC
 	opts.DCList = dcs.Test()
@@ -41,7 +41,7 @@ func TestPhone(phone string, testDC int) (normalized, codeHint string, err error
 		return "", "", fmt.Errorf("telegram: test network numbers look like 99966%dXXXX (got %q)", testDC, phone)
 	}
 	if m[1] != fmt.Sprint(testDC) {
-		return "", "", fmt.Errorf("telegram: %s belongs to test DC %s but BURU_TG_TEST_DC=%d", p, m[1], testDC)
+		return "", "", fmt.Errorf("telegram: %s belongs to test DC %s but SOCKABUS_TG_TEST_DC=%d", p, m[1], testDC)
 	}
 	d := m[1]
 	return p, strings.Repeat(d, 5) + " (or " + strings.Repeat(d, 6) + ")", nil

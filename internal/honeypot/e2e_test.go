@@ -3,8 +3,8 @@ package honeypot
 // End-to-end test of the live honeypot loop against real PostgreSQL and a real Temporal server,
 // with a fake channel sender and a fake LLM:
 //
-//	BURU_TEST_POSTGRES_URL=postgres://buru:buru@localhost:5432/buru?sslmode=disable \
-//	BURU_TEST_TEMPORAL=localhost:7233 go test ./internal/honeypot -run TestE2E -v
+//	SOCKABUS_TEST_POSTGRES_URL=postgres://buru:buru@localhost:5432/buru?sslmode=disable \
+//	SOCKABUS_TEST_TEMPORAL=localhost:7233 go test ./internal/honeypot -run TestE2E -v
 //
 // Migrations must be applied (make migrate-up). Skipped when the env vars are not set.
 
@@ -92,9 +92,9 @@ func (f *fakeLLM) Generate(_ context.Context, r llm.Request) (string, error) {
 }
 
 func TestE2ETelegramHoneypotLoop(t *testing.T) {
-	pgURL, temporalAddr := os.Getenv("BURU_TEST_POSTGRES_URL"), os.Getenv("BURU_TEST_TEMPORAL")
+	pgURL, temporalAddr := os.Getenv("SOCKABUS_TEST_POSTGRES_URL"), os.Getenv("SOCKABUS_TEST_TEMPORAL")
 	if pgURL == "" || temporalAddr == "" {
-		t.Skip("set BURU_TEST_POSTGRES_URL and BURU_TEST_TEMPORAL to run the end-to-end test")
+		t.Skip("set SOCKABUS_TEST_POSTGRES_URL and SOCKABUS_TEST_TEMPORAL to run the end-to-end test")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -320,9 +320,9 @@ func (hangingLLM) Generate(ctx context.Context, _ llm.Request) (string, error) {
 }
 
 func TestE2EHungLLMStillReplies(t *testing.T) {
-	pgURL, temporalAddr := os.Getenv("BURU_TEST_POSTGRES_URL"), os.Getenv("BURU_TEST_TEMPORAL")
+	pgURL, temporalAddr := os.Getenv("SOCKABUS_TEST_POSTGRES_URL"), os.Getenv("SOCKABUS_TEST_TEMPORAL")
 	if pgURL == "" || temporalAddr == "" {
-		t.Skip("set BURU_TEST_POSTGRES_URL and BURU_TEST_TEMPORAL to run the end-to-end test")
+		t.Skip("set SOCKABUS_TEST_POSTGRES_URL and SOCKABUS_TEST_TEMPORAL to run the end-to-end test")
 	}
 	oldHelper, oldPersona := helperLLMTimeout, personaLLMTimeout
 	helperLLMTimeout, personaLLMTimeout = 2*time.Second, 3*time.Second

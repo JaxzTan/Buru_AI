@@ -1,4 +1,4 @@
-# TRD: Buru AI — Scam Intelligence Network for Southeast Asia
+# TRD: Sockabus — Scam Intelligence Network for Southeast Asia
 
 | Field | Value |
 |---|---|
@@ -19,7 +19,7 @@
 
 ## 1. Overview & scope
 
-Buru AI is a Go backend that runs multilingual AI personas on honeypot messaging accounts, extracts scam entities (bank accounts, wallets, phone numbers, URLs) from conversations, traces crypto wallets on-chain, and serves verified intelligence to banks, e-wallets and exchanges through a low-latency lookup API, webhooks and a dashboard. This TRD covers all PRD Must and Should requirements (FR-1 to FR-13, NFR-1 to NFR-8). FR-14 (evidence reports), voice, and telco call diversion are deferred.
+Sockabus is a Go backend that runs multilingual AI personas on honeypot messaging accounts, extracts scam entities (bank accounts, wallets, phone numbers, URLs) from conversations, traces crypto wallets on-chain, and serves verified intelligence to banks, e-wallets and exchanges through a low-latency lookup API, webhooks and a dashboard. This TRD covers all PRD Must and Should requirements (FR-1 to FR-13, NFR-1 to NFR-8). FR-14 (evidence reports), voice, and telco call diversion are deferred.
 
 ## 2. Architecture
 
@@ -31,7 +31,7 @@ flowchart TB
     TG[Telegram connector<br/>MTProto user accounts]
     WA[WhatsApp connector]
   end
-  subgraph Core["Buru AI core (Go monolith)"]
+  subgraph Core["Sockabus core (Go monolith)"]
     GW[Channel gateway]
     PE[Persona engine]
     EX[Extraction + classification]
@@ -88,7 +88,7 @@ flowchart TB
 | Migrations | golang-migrate | Versioned up/down SQL files; same folder is sqlc's schema source. | Atlas |
 | Cache | Redis | Lookup API hot cache; rate limiting. | In-memory only |
 | Queue | Temporal task queues (MVP); Kafka later | Avoid extra infra until volume justifies it. | Kafka from day one |
-| LLM | Provider interface (`internal/llm`). Default: Gemini 3.8 Flash (`gemini-3.8-flash`, thinking level low) for personas and extraction; Claude API supported via `BURU_LLM_PROVIDER=anthropic` | Swap providers by config; personas, extraction and the persona generator never call a vendor SDK directly. | Self-hosted open model |
+| LLM | Provider interface (`internal/llm`). Default: Gemini 3.8 Flash (`gemini-3.8-flash`, thinking level low) for personas and extraction; Claude API supported via `SOCKABUS_LLM_PROVIDER=anthropic` | Swap providers by config; personas, extraction and the persona generator never call a vendor SDK directly. | Self-hosted open model |
 | Telegram | gotd/td (Go MTProto client) | User accounts behave like real people, unlike bots. | Bot API (scammers ignore bots) |
 | WhatsApp | whatsmeow (Go) | Only practical Go option for personal accounts. | Official Business API (not suitable for personas) |
 | Chain data | TronGrid + Etherscan APIs | USDT on TRON is dominant in SEA scams. | Paid analytics provider |
@@ -213,7 +213,7 @@ npx @dbml/cli db2dbml postgres "$DATABASE_URL" -o db/schema.dbml
 - **Append-only enforcement:** the application's database role has INSERT and SELECT only on `messages`, `entity_sightings` and `verifications`; no UPDATE or DELETE.
 - **Rate limiting:** per API key in Redis; webhook endpoints signed with HMAC.
 - **Data stored:** conversations, scammer identifiers, mule account numbers, wallets. Encrypted at rest; retention 24 months for entities, 12 months for raw messages (to confirm with legal).
-- **Custody:** Buru AI never holds, sends or receives funds. Personas never actually transfer money. This keeps the product outside payment and crypto-asset licensing scope.
+- **Custody:** Sockabus never holds, sends or receives funds. Personas never actually transfer money. This keeps the product outside payment and crypto-asset licensing scope.
 - **Regulatory posture:** customers are BNM/SC-regulated, so expect vendor due-diligence (security questionnaire, data processing agreement). PDPA 2010 applies to personal data handled. Get a legal opinion on honeypot account operation and data sharing before the first pilot (TR-18).
 - **Platform terms:** operating persona accounts on Telegram/WhatsApp likely breaches their terms of service; this is a business risk (see Risks), not a licensing issue.
 
@@ -278,7 +278,7 @@ This section tracks where the code still differs from this TRD. Delete each row 
 | # | Gap | Current code | Target | Done when |
 |---|---|---|---|---|
 | G-6 | Schema diagram | `db/schema.dbml` hand-copied from design | Regenerated from real migrations with `db2dbml` | File matches applied migrations |
-| G-7 | Operator auth | Live operator API and `/v1/lookup` use one bearer token (`BURU_OPERATOR_TOKEN`) mapped to `BURU_OPERATOR_ID` | Operators: email + TOTP with roles; customers: hashed API keys (FR-13, M3) | Token removed |
-| G-8 | Envelope encryption | AES-256-GCM with one key from `BURU_MESSAGE_KEY`; `dek_ref = local:v1` | Per-conversation data keys wrapped by a KMS (TR-14, M3) | Rows re-encrypted or readable under both refs |
+| G-7 | Operator auth | Live operator API and `/v1/lookup` use one bearer token (`SOCKABUS_OPERATOR_TOKEN`) mapped to `SOCKABUS_OPERATOR_ID` | Operators: email + TOTP with roles; customers: hashed API keys (FR-13, M3) | Token removed |
+| G-8 | Envelope encryption | AES-256-GCM with one key from `SOCKABUS_MESSAGE_KEY`; `dek_ref = local:v1` | Per-conversation data keys wrapped by a KMS (TR-14, M3) | Rows re-encrypted or readable under both refs |
 | G-9 | Telegram update state | gotd update state and access hashes are in memory; messages sent while the app is down are not replayed | Persistent state storage per account (e.g. bbolt or PostgreSQL) | Restart replays missed messages |
 | G-10 | Account health | Connector stops an account on `AUTH_KEY_UNREGISTERED` / `USER_DEACTIVATED*` and logs it | TR-17: set status `banned`/`cooldown` and alert the operator (M4) | Status changes automatically |

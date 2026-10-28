@@ -43,7 +43,7 @@ type Live struct {
 	TelegramSystem     string
 	TelegramTestDC     int // 1-3 = Telegram test network (development only); 0 = production
 
-	// SimEnabled turns on the local chat simulator (cmd/simchat). Default: on when BURU_ENV=local.
+	// SimEnabled turns on the local chat simulator (cmd/simchat). Default: on when SOCKABUS_ENV=local.
 	SimEnabled bool
 
 	LLMTimeout    time.Duration // per persona reply; falls back to the playbook line when exceeded
@@ -56,51 +56,51 @@ type Live struct {
 
 func Load() (Config, error) {
 	c := Config{
-		Env:               getenv("BURU_ENV", "local"),
-		Mode:              strings.ToLower(getenv("BURU_MODE", "demo")),
-		HTTPAddr:          getenv("BURU_HTTP_ADDR", ":8080"),
-		PostgresURL:       os.Getenv("BURU_POSTGRES_URL"),
-		RedisAddr:         getenv("BURU_REDIS_ADDR", "localhost:6379"),
-		TemporalHostPort:  getenv("BURU_TEMPORAL_HOSTPORT", "localhost:7233"),
-		TemporalNamespace: getenv("BURU_TEMPORAL_NAMESPACE", "default"),
-		TemporalTaskQueue: getenv("BURU_TEMPORAL_TASK_QUEUE", "buru-main"),
+		Env:               getenv("SOCKABUS_ENV", "local"),
+		Mode:              strings.ToLower(getenv("SOCKABUS_MODE", "demo")),
+		HTTPAddr:          getenv("SOCKABUS_HTTP_ADDR", ":8080"),
+		PostgresURL:       os.Getenv("SOCKABUS_POSTGRES_URL"),
+		RedisAddr:         getenv("SOCKABUS_REDIS_ADDR", "localhost:6379"),
+		TemporalHostPort:  getenv("SOCKABUS_TEMPORAL_HOSTPORT", "localhost:7233"),
+		TemporalNamespace: getenv("SOCKABUS_TEMPORAL_NAMESPACE", "default"),
+		TemporalTaskQueue: getenv("SOCKABUS_TEMPORAL_TASK_QUEUE", "sockabus-main"),
 	}
 	if c.PostgresURL == "" {
-		return c, fmt.Errorf("BURU_POSTGRES_URL is required")
+		return c, fmt.Errorf("SOCKABUS_POSTGRES_URL is required")
 	}
 	switch c.Mode {
 	case "demo":
 		return c, nil
 	case "live":
 	default:
-		return c, fmt.Errorf("BURU_MODE must be demo or live, got %q", c.Mode)
+		return c, fmt.Errorf("SOCKABUS_MODE must be demo or live, got %q", c.Mode)
 	}
 
 	var err error
 	l := Live{
-		OperatorToken:      os.Getenv("BURU_OPERATOR_TOKEN"),
-		MessageKey:         os.Getenv("BURU_MESSAGE_KEY"),
-		LLMProvider:        strings.ToLower(getenv("BURU_LLM_PROVIDER", "gemini")),
+		OperatorToken:      os.Getenv("SOCKABUS_OPERATOR_TOKEN"),
+		MessageKey:         os.Getenv("SOCKABUS_MESSAGE_KEY"),
+		LLMProvider:        strings.ToLower(getenv("SOCKABUS_LLM_PROVIDER", "gemini")),
 		GeminiAPIKey:       os.Getenv("GEMINI_API_KEY"),
 		AnthropicAPIKey:    os.Getenv("ANTHROPIC_API_KEY"),
-		PersonaModel:       os.Getenv("BURU_PERSONA_MODEL"),
-		ExtractModel:       os.Getenv("BURU_EXTRACT_MODEL"),
-		PersonaThinking:    getenv("BURU_PERSONA_THINKING", "low"),
-		TelegramAppHash:    os.Getenv("BURU_TG_APP_HASH"),
-		TelegramSessionDir: getenv("BURU_TG_SESSION_DIR", ".secrets/telegram"),
-		TelegramDevice:     os.Getenv("BURU_TG_DEVICE_MODEL"),
-		TelegramSystem:     os.Getenv("BURU_TG_SYSTEM_VERSION"),
+		PersonaModel:       os.Getenv("SOCKABUS_PERSONA_MODEL"),
+		ExtractModel:       os.Getenv("SOCKABUS_EXTRACT_MODEL"),
+		PersonaThinking:    getenv("SOCKABUS_PERSONA_THINKING", "low"),
+		TelegramAppHash:    os.Getenv("SOCKABUS_TG_APP_HASH"),
+		TelegramSessionDir: getenv("SOCKABUS_TG_SESSION_DIR", ".secrets/telegram"),
+		TelegramDevice:     os.Getenv("SOCKABUS_TG_DEVICE_MODEL"),
+		TelegramSystem:     os.Getenv("SOCKABUS_TG_SYSTEM_VERSION"),
 	}
-	if l.OperatorID, err = intEnv("BURU_OPERATOR_ID", 1); err != nil {
+	if l.OperatorID, err = intEnv("SOCKABUS_OPERATOR_ID", 1); err != nil {
 		return c, err
 	}
-	if l.TelegramAppID, err = atoiEnv("BURU_TG_APP_ID", 0); err != nil {
+	if l.TelegramAppID, err = atoiEnv("SOCKABUS_TG_APP_ID", 0); err != nil {
 		return c, err
 	}
-	if l.TelegramTestDC, err = atoiEnv("BURU_TG_TEST_DC", 0); err != nil {
+	if l.TelegramTestDC, err = atoiEnv("SOCKABUS_TG_TEST_DC", 0); err != nil {
 		return c, err
 	}
-	switch strings.ToLower(os.Getenv("BURU_SIM")) {
+	switch strings.ToLower(os.Getenv("SOCKABUS_SIM")) {
 	case "1", "true", "on":
 		l.SimEnabled = true
 	case "0", "false", "off":
@@ -108,7 +108,7 @@ func Load() (Config, error) {
 	default:
 		l.SimEnabled = c.Env == "local"
 	}
-	for _, h := range strings.Split(os.Getenv("BURU_TG_ONLY_FROM"), ",") {
+	for _, h := range strings.Split(os.Getenv("SOCKABUS_TG_ONLY_FROM"), ",") {
 		if h = strings.ToLower(strings.TrimSpace(h)); h != "" {
 			if !strings.HasPrefix(h, "@") && !strings.HasPrefix(h, "tg:") {
 				h = "@" + h
@@ -116,30 +116,30 @@ func Load() (Config, error) {
 			l.TelegramOnlyFrom = append(l.TelegramOnlyFrom, h)
 		}
 	}
-	if l.ReplyReadMin, err = durEnv("BURU_REPLY_READ_MIN", 12*time.Second); err != nil {
+	if l.ReplyReadMin, err = durEnv("SOCKABUS_REPLY_READ_MIN", 12*time.Second); err != nil {
 		return c, err
 	}
-	if l.ReplyReadMax, err = durEnv("BURU_REPLY_READ_MAX", 45*time.Second); err != nil {
+	if l.ReplyReadMax, err = durEnv("SOCKABUS_REPLY_READ_MAX", 45*time.Second); err != nil {
 		return c, err
 	}
-	if l.Inactivity, err = durEnv("BURU_INACTIVITY", 72*time.Hour); err != nil {
+	if l.Inactivity, err = durEnv("SOCKABUS_INACTIVITY", 72*time.Hour); err != nil {
 		return c, err
 	}
-	if l.LLMTimeout, err = durEnv("BURU_LLM_TIMEOUT", 45*time.Second); err != nil {
+	if l.LLMTimeout, err = durEnv("SOCKABUS_LLM_TIMEOUT", 45*time.Second); err != nil {
 		return c, err
 	}
-	if l.LLMTryTimeout, err = durEnv("BURU_LLM_TRY_TIMEOUT", 14*time.Second); err != nil {
+	if l.LLMTryTimeout, err = durEnv("SOCKABUS_LLM_TRY_TIMEOUT", 14*time.Second); err != nil {
 		return c, err
 	}
-	if l.TypingCPS, err = floatEnv("BURU_TYPING_CPS", 3.5); err != nil {
+	if l.TypingCPS, err = floatEnv("SOCKABUS_TYPING_CPS", 3.5); err != nil {
 		return c, err
 	}
 
 	if len(l.OperatorToken) < 24 {
-		return c, fmt.Errorf("BURU_OPERATOR_TOKEN must be set to a random string of at least 24 characters (openssl rand -hex 24)")
+		return c, fmt.Errorf("SOCKABUS_OPERATOR_TOKEN must be set to a random string of at least 24 characters (openssl rand -hex 24)")
 	}
 	if l.MessageKey == "" {
-		return c, fmt.Errorf("BURU_MESSAGE_KEY is required in live mode (openssl rand -base64 32)")
+		return c, fmt.Errorf("SOCKABUS_MESSAGE_KEY is required in live mode (openssl rand -base64 32)")
 	}
 	c.Live = l
 	return c, nil

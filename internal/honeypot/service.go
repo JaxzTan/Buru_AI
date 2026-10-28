@@ -278,7 +278,7 @@ func (s *Service) OperatorSend(ctx context.Context, convID, operatorID int64, te
 func (s *Service) SenderFor(acct db.HoneypotAccount) (gateway.Sender, error) {
 	if sim.IsSimAccount(acct.SessionRef) {
 		if s.Sim == nil {
-			return nil, fmt.Errorf("account %d is simulated but the simulator is disabled (BURU_SIM=1)", acct.ID)
+			return nil, fmt.Errorf("account %d is simulated but the simulator is disabled (SOCKABUS_SIM=1)", acct.ID)
 		}
 		return s.Sim, nil
 	}

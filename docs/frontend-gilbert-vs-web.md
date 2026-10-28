@@ -8,7 +8,7 @@ Both start from the same design source — the `unknown-frontend` prototype (tok
 |---|---|---|
 | UI | Prototype HTML served as-is: `internal/server/pages/console.html`, `portal.html` (React UMD, no build) | Ported to Next.js 16 + Tailwind v4: typed TSX components, one App Router route per page |
 | Data | Live — `fetch('/internal/…')`, `fetch('/v1/…')` against a Go demo backend | Mock — `web/src/lib/mock.ts` |
-| Backend | New: seeded demo store, extraction pipeline, persona engine, scripted scammer simulator | None yet; `/api/*` proxies to Go (`BURU_API_URL`, default `:8080`) |
+| Backend | New: seeded demo store, extraction pipeline, persona engine, scripted scammer simulator | None yet; `/api/*` proxies to Go (`SOCKABUS_API_URL`, default `:8080`) |
 | Served at | `/console`, `/portal` (Go server) | `/operator/*`, `/portal/*` (Next.js) |
 | Run | `go run ./cmd/demo` | `cd web && pnpm dev` |
 | Matches TRD stack | Backend yes, frontend no | Frontend yes, backend not wired |

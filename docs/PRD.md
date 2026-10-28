@@ -1,4 +1,4 @@
-# PRD: Buru AI — Scam Intelligence Network for Southeast Asia
+# PRD: Sockabus — Scam Intelligence Network for Southeast Asia
 
 | Field | Value |
 |---|---|
@@ -43,7 +43,7 @@ Scam syndicates in Southeast Asia run industrial-scale operations through WhatsA
 |---|---|---|
 | **Farah — Fraud analyst, digital bank / e-wallet** | Reviews suspicious transfers daily; blocklists are stale. | Real-time check: "Is this recipient account linked to a scam?" |
 | **Wei Ming — Risk lead, crypto exchange** | Sees deposits from scam victims and withdrawals to scam wallets. | Wallet addresses and fund-flow evidence tied to known scams. |
-| **Operator (internal)** | Buru AI staff running personas and honeypots. | Monitor conversations, intervene, verify extracted data. |
+| **Operator (internal)** | Sockabus staff running personas and honeypots. | Monitor conversations, intervene, verify extracted data. |
 
 ## 5. User stories & functional requirements
 

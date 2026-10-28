@@ -36,7 +36,7 @@ The comment on `registerDemo` was changed to "mounts the API the Next.js UIs (we
 
 - `GET /`, `/console` and `/portal` on the Go server (`:8080`) now return 404.
 - Open the UI through Next.js (`cd web && pnpm dev`): `/operator` and `/portal`.
-- Next.js forwards `/api/*` to the Go API (`BURU_API_URL`, default `http://localhost:8080`).
+- Next.js forwards `/api/*` to the Go API (`SOCKABUS_API_URL`, default `http://localhost:8080`).
 
 ### Verified
 
