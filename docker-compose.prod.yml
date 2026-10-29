@@ -1,0 +1,59 @@
+# Production overlay (docs/TRD.md §8, TR-23): one VPS runs the full stack behind Caddy.
+# make deploy uses: docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app
+# Only Caddy is reachable from outside; Temporal UI and Uptime Kuma bind to 127.0.0.1 (open them over an SSH tunnel).
+services:
+  postgres:
+    restart: unless-stopped
+    ports: !reset []
+
+  redis:
+    restart: unless-stopped
+    ports: !reset []
+
+  temporal:
+    restart: unless-stopped
+    # SQLite file on a volume, so workflow history survives restarts and deploys.
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/home/temporal/temporal.db"]
+    ports: !override ["127.0.0.1:8233:8233"]
+    volumes: [temporal-data:/home/temporal]
+
+  app:
+    restart: unless-stopped
+    ports: !reset []
+    environment:
+      BURU_ENV: prod
+      BURU_TG_SESSION_DIR: /secrets/telegram
+    # Session files from make tglogin; the image runs as uid 65532 (chown -R 65532:65532 .secrets/telegram).
+    volumes: [./.secrets/telegram:/secrets/telegram]
+
+  web:
+    restart: unless-stopped
+    ports: !reset []
+
+  caddy:
+    container_name: caddy
+    profiles: [app]
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      BURU_DOMAIN: ${BURU_DOMAIN:?set BURU_DOMAIN in .env}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # TLS certificates; losing it means re-issuing from Let's Encrypt
+      - caddy-config:/config
+    depends_on: [app, web]
+
+  uptime-kuma:
+    container_name: uptime-kuma
+    profiles: [app]
+    image: louislam/uptime-kuma:1.23.16
+    restart: unless-stopped
+    ports: ["127.0.0.1:3001:3001"]
+    volumes: [uptime-kuma-data:/app/data]
+
+volumes:
+  temporal-data:
+  caddy-data:
+  caddy-config:
+  uptime-kuma-data:
