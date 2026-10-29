@@ -2,9 +2,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import { DEV_CHAT, useAgo } from "@/lib/hooks";
-import { demoSteps, dismissToast, liveConvos, queueOf, resetDemo, useStore } from "@/lib/store";
+import { demoSteps, dismissToast, flushDecisions, liveConvos, queueOf, resetDemo, useStore } from "@/lib/store";
 
 const OPERATE = [
   { href: "/personas", label: "Personas", id: "personas" },
@@ -31,8 +31,18 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </div>
       <Toasts />
+      <Suspense fallback={null}>
+        <FlushOnNavigate />
+      </Suspense>
     </>
   );
+}
+
+// Leaving a page sends any Verify/Reject still inside its Undo window (spec §4.5).
+function FlushOnNavigate() {
+  const path = usePathname();
+  useEffect(() => flushDecisions(), [path]);
+  return null;
 }
 
 type NavItem = (typeof OPERATE)[number];
@@ -137,8 +147,8 @@ function Toasts() {
   return (
     <div className="toasts" aria-live="polite">
       {toasts.map((t) => (
-        <div key={t.id} className="toast" data-testid="verify-toast">
-          <span className="ok">✓</span>
+        <div key={t.id} className="toast" data-testid="verify-toast" role={t.error ? "alert" : undefined}>
+          {t.error ? <span className="err">!</span> : <span className="ok">✓</span>}
           <span>{t.msg}</span>
           {t.href ? (
             <Link href={t.href} onClick={() => dismissToast(t.id)} style={{ color: "var(--mustard)", fontWeight: 700, textDecoration: "none" }}>
@@ -147,6 +157,7 @@ function Toasts() {
           ) : t.run ? (
             <button
               type="button"
+              data-testid={t.testId}
               onClick={() => {
                 t.run?.();
                 dismissToast(t.id);

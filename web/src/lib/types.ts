@@ -59,7 +59,7 @@ export interface Entity {
   note?: string;
 }
 
-export type LookupResult = "held" | "warn" | "sent";
+export type LookupResult = "held" | "sent";
 
 export interface LookupResponse {
   match: boolean;

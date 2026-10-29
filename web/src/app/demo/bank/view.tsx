@@ -1,9 +1,9 @@
 "use client";
-import Link from "next/link";
 import { useRef, useState, type ReactNode } from "react";
 import { Badge, Head, Spin } from "@/components/ui";
 import { BANKS, digits, plural } from "@/lib/format";
 import { cancelTransfer, clearLookup, fillBank, runLookup, setBankDraft, useStore } from "@/lib/store";
+import type { Confidence } from "@/lib/types";
 
 export function BankView() {
   const { data, ui } = useStore();
@@ -44,7 +44,7 @@ export function BankView() {
         <div className="reasons">
           <div>
             <span className="caps muted">Confidence</span>
-            <b>High · human-verified</b>
+            <b>{confLabel(L.res.confidence)}</b>
           </div>
           <div>
             <span className="caps muted">Scam type</span>
@@ -73,28 +73,6 @@ export function BankView() {
         </div>
       </div>
     );
-  } else if (L?.result === "warn" && e) {
-    result = (
-      <div className="result warn" data-testid="result-warn" role="status">
-        <div className="rh">
-          <span className="ic">?</span>
-          <div>
-            <h2>Check before sending</h2>
-            <p>
-              This account was reported in a scam chat, but no analyst has confirmed it yet. Confidence: <b>{e.conf}</b>.
-            </p>
-          </div>
-        </div>
-        <p className="muted" style={{ fontSize: 15 }}>
-          A bank would usually ask the customer to confirm. Verify it in the queue to see a full hold.
-        </p>
-        <div className="row-gap">
-          <Link className="btn btn-primary" href={`/verify?selected=${e.id}`}>
-            Open in verify queue →
-          </Link>
-        </div>
-      </div>
-    );
   } else if (L) {
     result = (
       <div className="result sent" data-testid="result-sent" role="status">
@@ -120,25 +98,21 @@ export function BankView() {
     ? [
         ["DemoBank asks Sockabus", "POST /v1/lookup with bank + account number"],
         ["Sockabus checks verified intelligence", "Only human-verified accounts return high confidence"],
-        ["DemoBank decides", "Hold, warn or send — in well under a second"],
+        ["DemoBank decides", "Hold or send — in well under a second"],
       ]
     : L.result === "held"
       ? [
           ["DemoBank asked Sockabus", `POST /v1/lookup · bank account · ${L.bank}`],
-          ["Sockabus found a verified record", "Captured from a scammer chat, confirmed by an operator"],
+          L.res.confidence === "high"
+            ? ["Sockabus found a verified record", "Captured from a scammer chat, confirmed by an operator"]
+            : ["Sockabus found a record", "Captured from a scammer chat, not yet confirmed by an operator"],
           ["DemoBank held the transfer", `Answer in ${L.ms} ms, inside the payment window`],
         ]
-      : L.result === "warn"
-        ? [
-            ["DemoBank asked Sockabus", `POST /v1/lookup · bank account · ${L.bank}`],
-            ["Sockabus found an unconfirmed report", "Extracted automatically, waiting for a human"],
-            ["DemoBank warns the customer", "Medium confidence never triggers an automatic hold"],
-          ]
-        : [
-            ["DemoBank asked Sockabus", `POST /v1/lookup · bank account · ${L.bank}`],
-            ["No record in Sockabus intelligence", "Never seen in a scammer conversation"],
-            ["DemoBank sent the money", `Answer in ${L.ms} ms, no friction for good customers`],
-          ];
+      : [
+          ["DemoBank asked Sockabus", `POST /v1/lookup · bank account · ${L.bank}`],
+          ["No record in Sockabus intelligence", "Never seen in a scammer conversation"],
+          ["DemoBank sent the money", `Answer in ${L.ms} ms, no friction for good customers`],
+        ];
 
   return (
     <>
@@ -255,6 +229,13 @@ export function BankView() {
       </div>
     </>
   );
+}
+
+// Held banner shows the confidence the API returned. Only a human sets high.
+function confLabel(c?: Confidence) {
+  if (c === "high") return "High · human-verified";
+  if (c === "medium") return "Medium · not yet verified";
+  return "Low · not yet verified";
 }
 
 // Pretty JSON with the deciding fields picked out in mustard.

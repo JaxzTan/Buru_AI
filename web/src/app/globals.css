@@ -200,13 +200,11 @@ tr.hl-green td { background: var(--green-soft); }
 .quick button { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 5px 10px; cursor: pointer; font-size: 14px; color: var(--ink); }
 .result { padding: 20px 24px; display: grid; gap: 14px; border-top: 3px solid; }
 .result.held { background: var(--red-soft); border-color: var(--red); }
-.result.warn { background: var(--amber-soft); border-color: var(--amber); }
 .result.sent { background: var(--green-soft); border-color: var(--green); }
 .result .rh { display: flex; gap: 12px; align-items: center; }
 .result .ic { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 22px/1 var(--f-ui); flex: none; }
 .result h2 { font: 400 32px/36px var(--f-display); }
 .held h2, .held .ic { color: var(--red); } .held .ic { background: var(--red); color: #fff; }
-.warn h2 { color: var(--amber); } .warn .ic { background: var(--amber); }
 .sent h2 { color: var(--green); } .sent .ic { background: var(--green); }
 .result p { margin: 0; }
 .reasons { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -276,6 +274,7 @@ tr.hl-green td { background: var(--green-soft); }
 .toasts { position: fixed; right: max(24px, env(safe-area-inset-right, 0px)); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px; z-index: 50; }
 .toast { background: var(--ink); color: #fff; border-radius: 14px; padding: 12px 18px; display: flex; gap: 12px; align-items: center; box-shadow: 0 8px 24px rgba(17,26,46,.25); animation: up .2s ease-out; max-width: min(460px, calc(100vw - 48px)); }
 .toast .ok { color: #8BD3AE; font-weight: 700; }
+.toast .err { color: #F4A8A8; font-weight: 700; }
 .toast button { background: none; border: 0; color: var(--mustard); font-weight: 700; cursor: pointer; padding: 0; }
 @keyframes up { from { transform: translateY(8px); opacity: 0; } }
 

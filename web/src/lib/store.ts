@@ -10,7 +10,7 @@ import { useSyncExternalStore } from "react";
 import { clock, groupAcct, showVal, today, typeLabel } from "./format";
 import { GENERATED, SEED_CONVOS, SEED_ENTITIES, SEED_PERSONAS } from "./seed";
 import { classify, extract, lookup, personaReply } from "./sim";
-import type { BankDraft, Conversation, EntityStatus, Lookup, PersonaStatus } from "./types";
+import type { BankDraft, Conversation, Entity, Lookup, PersonaStatus } from "./types";
 
 const KEY = "sockabus-console-v1";
 
@@ -31,7 +31,11 @@ export interface Toast {
   label?: string;
   href?: string;
   run?: () => void;
+  testId?: string; // for the action button
+  error?: boolean;
 }
+
+type ToastAction = { label: string; href?: string; run?: () => void; testId?: string };
 
 interface UI {
   generating: boolean;
@@ -131,10 +135,11 @@ export function demoSteps(d: Data) {
 
 // ---------- toasts ----------
 let toastId = 0;
-export function toast(msg: string, action?: { label: string; href?: string; run?: () => void }) {
-  const t: Toast = { id: ++toastId, msg, ...action };
+export function toast(msg: string, action?: ToastAction, opts: { ms?: number; error?: boolean } = {}): number {
+  const t: Toast = { id: ++toastId, msg, ...action, error: opts.error };
   setUI((u) => ({ toasts: [...u.toasts, t] }));
-  setTimeout(() => dismissToast(t.id), 6000);
+  setTimeout(() => dismissToast(t.id), opts.ms ?? 6000);
+  return t.id;
 }
 export const dismissToast = (id: number) => setUI((u) => ({ toasts: u.toasts.filter((t) => t.id !== id) }));
 
@@ -182,16 +187,92 @@ export function operatorSend(id: string, text: string) {
   updateConvo(id, (c) => ({ ...c, last: t, msgs: [...c.msgs, { who: "operator", text, t }] }));
 }
 
-export function decide(id: string, to: EntityStatus, note = "") {
+// ---------- Verify / Reject with Undo (spec §4.5) ----------
+// The screen changes at once; the save waits UNDO_MS so an undone decision never reaches
+// the append-only verifications table. Set NEXT_PUBLIC_UNDO_MS=0 in tests.
+const undoEnv = Number(process.env.NEXT_PUBLIC_UNDO_MS);
+export const UNDO_MS = process.env.NEXT_PUBLIC_UNDO_MS && undoEnv >= 0 ? undoEnv : 6000;
+
+type Decision = { to: "verified" | "rejected"; note: string };
+type EntityFields = Pick<Entity, "status" | "conf" | "note">;
+interface Pending extends Decision {
+  prev: EntityFields;
+  timer: ReturnType<typeof setTimeout>;
+  toastId: number;
+}
+const pending = new Map<string, Pending>(); // one timer per entity
+
+const patchEntity = (id: string, fields: Partial<Entity>) =>
+  setData((d) => ({ ...d, entities: d.entities.map((x) => (x.id === id ? { ...x, ...fields } : x)) }));
+const applyDecision = (id: string, { to, note }: Decision) =>
+  patchEntity(id, { status: to, conf: to === "verified" ? "high" : "low", note });
+
+// Swap point: POST /internal/entities/{id}/verify with { decision, note }.
+// keepalive lets the request finish while the tab closes. Must throw with the API's error.message on failure.
+// Demo: the change is already in local data, so there is nothing to send yet.
+async function saveDecision(id: string, d: Decision, keepalive = false): Promise<void> {
+  void [id, d, keepalive];
+}
+
+export function decide(id: string, to: Decision["to"], note = "") {
   const e = get().data.entities.find((x) => x.id === id);
   if (!e) return;
+  if (pending.has(id)) send(id); // a second decision on the same entity: save the first one now
   const prev = { status: e.status, conf: e.conf, note: e.note };
-  const patch = (fields: Partial<typeof e>) =>
-    setData((d) => ({ ...d, entities: d.entities.map((x) => (x.id === id ? { ...x, ...fields } : x)) }));
-  patch({ status: to, conf: to === "verified" ? "high" : "low", note });
+  applyDecision(id, { to, note });
   const word = to === "verified" ? "Verified" : "Rejected";
-  toast(`${word} ${typeLabel(e)} ${showVal(e)}${to === "verified" ? " — now high" : ""}`, { label: "Undo", run: () => patch(prev) });
+  const toastId = toast(
+    `${word} ${typeLabel(e)} ${showVal(e)}${to === "verified" ? " — now high" : ""}`,
+    { label: "Undo", run: () => undoDecision(id), testId: "verify-undo-btn" },
+    { ms: Math.max(6000, UNDO_MS) },
+  );
+  pending.set(id, { to, note, prev, toastId, timer: setTimeout(() => send(id), UNDO_MS) });
 }
+
+function undoDecision(id: string) {
+  const p = pending.get(id);
+  if (!p) return; // already sent
+  clearTimeout(p.timer);
+  pending.delete(id);
+  patchEntity(id, p.prev);
+  toast("Undone");
+}
+
+function send(id: string, keepalive = false) {
+  const p = pending.get(id);
+  if (!p) return;
+  clearTimeout(p.timer);
+  pending.delete(id);
+  // Too late to undo: drop the Undo button from its toast.
+  setUI((u) => ({ toasts: u.toasts.map((t) => (t.id === p.toastId ? { ...t, run: undefined, label: undefined } : t)) }));
+  commit(id, p, p.prev, keepalive);
+}
+
+// Sends a decision. On failure the row goes back to the queue with a Retry that resends it.
+function commit(id: string, d: Decision, prev: EntityFields, keepalive = false) {
+  saveDecision(id, d, keepalive).catch((err: unknown) => {
+    patchEntity(id, prev);
+    const msg = err instanceof Error && err.message ? err.message : "Could not save the decision";
+    toast(
+      msg,
+      {
+        label: "Retry",
+        testId: "verify-retry-btn",
+        run: () => {
+          applyDecision(id, d);
+          commit(id, d, prev);
+        },
+      },
+      { error: true },
+    );
+  });
+}
+
+// Send every waiting decision now: on route change and when the tab closes, so none is lost.
+export function flushDecisions(keepalive = false) {
+  for (const id of [...pending.keys()]) send(id, keepalive);
+}
+if (typeof window !== "undefined") window.addEventListener("pagehide", () => flushDecisions(true));
 
 // Scammer message from the web chat page. Returns the conversation id.
 export function scammerSends(personaId: string, text: string): string | null {
@@ -271,6 +352,8 @@ export function toggleTelegram() {
 }
 
 export function resetDemo() {
+  for (const p of pending.values()) clearTimeout(p.timer);
+  pending.clear();
   set(() => ({ data: seed(), ui: freshUI(Date.now()) }), true);
   toast("Demo data reset");
 }
