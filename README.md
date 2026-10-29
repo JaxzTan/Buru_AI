@@ -142,7 +142,7 @@ docker compose exec temporal temporal workflow execute \
 | `db/migrations` | PostgreSQL schema (golang-migrate) |
 | `db/queries` | sqlc query files; `make sqlc` generates `internal/db` |
 | `db/seed` | Demo operator, playbooks and personas (`make seed`) |
-| `web` | Next.js dashboard: `/operator` console, `/portal` customer portal. `/api/*` proxies to the Go API |
+| `web` | Next.js Sockabus Console: `/personas`, `/conversations`, `/verify`, `/entities`, `/status`, `/demo/bank`, `/demo/chat`. `/api/*` proxies to the Go API |
 | `internal/engine` | Honeypot loop: extract → classify → stage → persona reply |
 | `internal/db` | sqlc-generated data layer |
 | `internal/demostore` | In-memory data layer seeded from `seed.json` (to be replaced by PostgreSQL + Redis) |

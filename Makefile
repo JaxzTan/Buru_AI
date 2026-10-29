@@ -13,13 +13,35 @@ SQLC := $(or $(shell command -v sqlc),$(shell go env GOPATH)/bin/sqlc)
 # golangci-lint v2 under either name, else where `go install` puts it
 GOLANGCI := $(or $(shell command -v golangci-lint-v2),$(shell command -v golangci-lint),$(shell go env GOPATH)/bin/golangci-lint)
 
-.PHONY: up down migrate-up migrate-down seed keys tglogin tgchat sim sqlc run web test test-db test-e2e lint
+# Full prod stack on the VPS (docker-compose.prod.yml adds Caddy, Uptime Kuma, persistent Temporal)
+PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app
+
+.PHONY: up down deploy prod-ps prod-logs backup restore-test migrate-up migrate-down seed keys tglogin tgchat sim sqlc run web test test-db test-e2e lint
 
 up: ## start PostgreSQL, Redis, Temporal
 	docker compose up -d --wait postgres redis temporal
 
-down:
-	docker compose down
+down: ## stop everything, including the app/web profile containers
+	docker compose --profile app down
+
+deploy: ## on the VPS: pull main, run migrations, rebuild and restart the full stack (TR-23)
+	git pull --ff-only origin main
+	$(PROD) up -d --wait postgres redis
+	$(PROD) run --rm migrate
+	$(PROD) up -d --build --remove-orphans
+	$(PROD) ps
+
+prod-ps:
+	$(PROD) ps
+
+prod-logs: ## follow app, web and caddy logs on the VPS
+	$(PROD) logs -f --tail=100 app web caddy
+
+backup: ## gzip pg_dump into backups/, copied off-server when BACKUP_REMOTE is set
+	scripts/backup.sh
+
+restore-test: ## restore the newest dump into a scratch database, then drop it
+	scripts/restore-test.sh $(FILE)
 
 migrate-up:
 	@migrate -path db/migrations -database '$(MIGRATE_DB)' up # @: never echo the URL (it holds the password)
