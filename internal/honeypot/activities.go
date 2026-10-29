@@ -22,7 +22,7 @@ import (
 )
 
 // LLM time limits. Extraction and classification fall back to regex and keywords; the persona
-// falls back to the playbook's example line. Override with BURU_LLM_TIMEOUT (persona replies).
+// falls back to the playbook's example line. Override with SOCKABUS_LLM_TIMEOUT (persona replies).
 var (
 	helperLLMTimeout  = 20 * time.Second
 	personaLLMTimeout = 45 * time.Second

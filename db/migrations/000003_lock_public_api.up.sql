@@ -1,5 +1,5 @@
 -- Supabase exposes the public schema through its Data API to the anon and authenticated roles.
--- Buru's data is served only by the Go API (docs/TRD.md §3, §7), so those roles get nothing.
+-- Sockabus's data is served only by the Go API (docs/TRD.md §3, §7), so those roles get nothing.
 -- No-op on plain PostgreSQL, where these roles do not exist.
 DO $$
 DECLARE

@@ -1,4 +1,4 @@
-# Buru AI
+# Sockabus
 
 > Scam intelligence network for Southeast Asia: AI honeypot personas that turn scammer chats into verified intel for banks and e-wallets.
 
@@ -19,7 +19,7 @@
 
 ## About
 
-Multilingual AI personas run on honeypot messaging accounts and keep scammers talking. Buru AI pulls mule bank accounts, crypto wallets, phone numbers and URLs out of those conversations, and serves verified intelligence to banks, e-wallets and exchanges through a low-latency lookup API.
+Multilingual AI personas run on honeypot messaging accounts and keep scammers talking. Sockabus pulls mule bank accounts, crypto wallets, phone numbers and URLs out of those conversations, and serves verified intelligence to banks, e-wallets and exchanges through a low-latency lookup API.
 
 - Product requirements: [docs/PRD.md](docs/PRD.md)
 - Technical design: [docs/TRD.md](docs/TRD.md)
@@ -65,13 +65,13 @@ Create `.env` at the repo root and set:
 
 | Variable | Description |
 |----------|-------------|
-| `BURU_ENV` | Environment name |
-| `BURU_HTTP_ADDR` | API listen address |
-| `BURU_POSTGRES_URL` | PostgreSQL connection string |
-| `BURU_REDIS_ADDR` | Redis address |
-| `BURU_TEMPORAL_HOSTPORT` | Temporal server host:port |
-| `BURU_TEMPORAL_NAMESPACE` | Temporal namespace |
-| `BURU_TEMPORAL_TASK_QUEUE` | Temporal task queue (e.g. `buru-main`) |
+| `SOCKABUS_ENV` | Environment name |
+| `SOCKABUS_HTTP_ADDR` | API listen address |
+| `SOCKABUS_POSTGRES_URL` | PostgreSQL connection string |
+| `SOCKABUS_REDIS_ADDR` | Redis address |
+| `SOCKABUS_TEMPORAL_HOSTPORT` | Temporal server host:port |
+| `SOCKABUS_TEMPORAL_NAMESPACE` | Temporal namespace |
+| `SOCKABUS_TEMPORAL_TASK_QUEUE` | Temporal task queue (e.g. `sockabus-main`) |
 | `SUPABASE_PASSWORD` | Supabase database password |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (dashboard) |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key (dashboard) |
@@ -82,12 +82,12 @@ Create `.env` at the repo root and set:
 ```bash
 make up            # PostgreSQL :5432, Redis :6379, Temporal :7233 (UI :8233)
 make migrate-up
-make run           # API on :8080 (BURU_MODE=demo: in-memory pitch data)
+make run           # API on :8080 (SOCKABUS_MODE=demo: in-memory pitch data)
 curl localhost:8080/readyz
 make web           # dashboard on :3000
 ```
 
-Live honeypot on a real Telegram account (`BURU_MODE=live`): see [docs/telegram-honeypot.md](docs/telegram-honeypot.md).
+Live honeypot on a real Telegram account (`SOCKABUS_MODE=live`): see [docs/telegram-honeypot.md](docs/telegram-honeypot.md).
 
 ```sh
 make seed && make tglogin PHONE=+60XXXXXXXXX PERSONA=1 && make run
@@ -97,7 +97,7 @@ Smoke-test the Temporal worker:
 
 ```bash
 docker compose exec temporal temporal workflow execute \
-  --type Ping --task-queue buru-main --input '"buru"'
+  --type Ping --task-queue sockabus-main --input '"sockabus"'
 ```
 
 ## Usage
@@ -108,7 +108,7 @@ docker compose exec temporal temporal workflow execute \
 | `make migrate-up` / `make migrate-down` | Apply / roll back one migration |
 | `make sqlc` | Generate `internal/db` from `db/queries` |
 | `make seed` | Load demo operator, playbooks and personas |
-| `make keys` | Print fresh `BURU_OPERATOR_TOKEN` and `BURU_MESSAGE_KEY` values |
+| `make keys` | Print fresh `SOCKABUS_OPERATOR_TOKEN` and `SOCKABUS_MESSAGE_KEY` values |
 | `make tglogin PHONE=… PERSONA=…` | Log a honeypot number into Telegram and bind it |
 | `make sim PERSONA=…` | Chat with a persona without Telegram (needs `make run`) |
 | `make tgchat PHONE=… TO=…` | Play the scammer from your terminal |
@@ -123,7 +123,7 @@ docker compose exec temporal temporal workflow execute \
 
 | Path | Purpose |
 |---|---|
-| `cmd/buru` | Entry point: HTTP server + Temporal worker |
+| `cmd/sockabus` | Entry point: HTTP server + Temporal worker |
 | `internal/config` | Env-based config |
 | `internal/server` | HTTP routes, health checks |
 | `internal/workflows` | Temporal `ConversationWorkflow`: reply timing, typing, takeover (TR-3, TR-5) |

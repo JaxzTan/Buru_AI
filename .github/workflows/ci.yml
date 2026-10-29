@@ -15,7 +15,7 @@ jobs:
           go-version-file: go.mod
       - run: go vet ./...
       - run: go test -race ./...
-      - run: docker build -t buru:ci .
+      - run: docker build -t sockabus:ci .
 
   db: # TRD §8: sqlc diff + vet, migrations up/down, integration tests on real PostgreSQL
     runs-on: ubuntu-latest
@@ -49,7 +49,7 @@ jobs:
       - run: migrate -path db/migrations -database "$DB_URL" up
       - run: go test -count=1 ./internal/db/
         env:
-          BURU_TEST_POSTGRES_URL: ${{ env.DB_URL }}
+          SOCKABUS_TEST_POSTGRES_URL: ${{ env.DB_URL }}
 
   web:
     runs-on: ubuntu-latest

@@ -75,10 +75,10 @@ type Manager struct {
 
 func NewManager(cfg Config, h gateway.InboundHandler) (*Manager, error) {
 	if cfg.AppID == 0 || cfg.AppHash == "" {
-		return nil, errors.New("telegram: BURU_TG_APP_ID and BURU_TG_APP_HASH are required (my.telegram.org → API development tools)")
+		return nil, errors.New("telegram: SOCKABUS_TG_APP_ID and SOCKABUS_TG_APP_HASH are required (my.telegram.org → API development tools)")
 	}
 	if cfg.SessionDir == "" {
-		return nil, errors.New("telegram: BURU_TG_SESSION_DIR is required")
+		return nil, errors.New("telegram: SOCKABUS_TG_SESSION_DIR is required")
 	}
 	if cfg.Log == nil {
 		cfg.Log = slog.Default()
@@ -93,7 +93,7 @@ func NewManager(cfg Config, h gateway.InboundHandler) (*Manager, error) {
 }
 
 // DefaultDevice is what the account reports to Telegram ("Active sessions"). Override with
-// BURU_TG_DEVICE_MODEL / BURU_TG_SYSTEM_VERSION to match the persona's phone.
+// SOCKABUS_TG_DEVICE_MODEL / SOCKABUS_TG_SYSTEM_VERSION to match the persona's phone.
 func DefaultDevice() telegram.DeviceConfig {
 	return telegram.DeviceConfig{DeviceModel: "Samsung SM-A546E", SystemVersion: "Android 14", AppVersion: "11.2.3", SystemLangCode: "en", LangCode: "en"}
 }
@@ -219,7 +219,7 @@ func (m *Manager) onMessage(ctx context.Context, c *conn, e tg.Entities, mc tg.M
 		display = joinName(user.FirstName, user.LastName)
 	}
 	if len(m.cfg.OnlyFrom) > 0 && !m.cfg.OnlyFrom[lower(handle)] && !m.cfg.OnlyFrom["tg:"+strconv.FormatInt(userID, 10)] {
-		lg.Info("ignoring message from sender outside BURU_TG_ONLY_FROM", "handle", handle)
+		lg.Info("ignoring message from sender outside SOCKABUS_TG_ONLY_FROM", "handle", handle)
 		return
 	}
 

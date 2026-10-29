@@ -30,7 +30,7 @@ type LoginConfig struct {
 // It returns the signed-in user and the session_ref to store on honeypot_accounts.
 func Login(ctx context.Context, cfg LoginConfig) (*tg.User, string, error) {
 	if cfg.AppID == 0 || cfg.AppHash == "" {
-		return nil, "", errors.New("set BURU_TG_APP_ID and BURU_TG_APP_HASH (https://my.telegram.org → API development tools) in .env")
+		return nil, "", errors.New("set SOCKABUS_TG_APP_ID and SOCKABUS_TG_APP_HASH (https://my.telegram.org → API development tools) in .env")
 	}
 	phone, codeHint := cfg.Phone, ""
 	if cfg.TestDC != 0 {

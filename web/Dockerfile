@@ -11,8 +11,8 @@ RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Rewrites are fixed at build time, so the Go API address is a build arg (next.config.ts).
-ARG BURU_API_URL=http://app:8080
-ENV BURU_API_URL=$BURU_API_URL NEXT_TELEMETRY_DISABLED=1
+ARG SOCKABUS_API_URL=http://app:8080
+ENV SOCKABUS_API_URL=$SOCKABUS_API_URL NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
 FROM node:24-alpine

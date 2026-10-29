@@ -3,7 +3,7 @@
 //
 //	go run ./cmd/tgchat -phone <your test account> -to <honeypot phone or @username>
 //
-// Works on the real network or, with BURU_TG_TEST_DC=2, on Telegram's test network.
+// Works on the real network or, with SOCKABUS_TG_TEST_DC=2, on Telegram's test network.
 package main
 
 import (
@@ -38,14 +38,14 @@ func main() {
 func run() error {
 	phone := flag.String("phone", "", "YOUR scammer test account: +60... or 99966XYYYY on the test network")
 	to := flag.String("to", "", "the honeypot: its @username or phone number")
-	dir := flag.String("session-dir", getenv("BURU_TG_SESSION_DIR", ".secrets/telegram"), "session folder")
+	dir := flag.String("session-dir", getenv("SOCKABUS_TG_SESSION_DIR", ".secrets/telegram"), "session folder")
 	flag.Parse()
 	if *phone == "" || *to == "" {
 		return errors.New("usage: tgchat -phone <your account> -to <honeypot @username or phone>")
 	}
-	appID, _ := strconv.Atoi(os.Getenv("BURU_TG_APP_ID"))
-	testDC, _ := strconv.Atoi(os.Getenv("BURU_TG_TEST_DC"))
-	cfg := tgconn.LoginConfig{AppID: appID, AppHash: os.Getenv("BURU_TG_APP_HASH"), SessionDir: *dir,
+	appID, _ := strconv.Atoi(os.Getenv("SOCKABUS_TG_APP_ID"))
+	testDC, _ := strconv.Atoi(os.Getenv("SOCKABUS_TG_TEST_DC"))
+	cfg := tgconn.LoginConfig{AppID: appID, AppHash: os.Getenv("SOCKABUS_TG_APP_HASH"), SessionDir: *dir,
 		Phone: *phone, TestDC: testDC, SignUpName: "Test Scammer", Device: tgconn.DefaultDevice()}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -58,7 +58,7 @@ func run() error {
 		return fmt.Errorf("login: %w", err)
 	}
 	path, _ := tgconn.SessionPath(*dir, ref)
-	fmt.Printf("You are %s (tg:%d). If the honeypot uses BURU_TG_ONLY_FROM, add tg:%d to it.\n", self.FirstName, self.ID, self.ID)
+	fmt.Printf("You are %s (tg:%d). If the honeypot uses SOCKABUS_TG_ONLY_FROM, add tg:%d to it.\n", self.FirstName, self.ID, self.ID)
 
 	dispatcher := tg.NewUpdateDispatcher()
 	gaps := updates.New(updates.Config{Handler: dispatcher})

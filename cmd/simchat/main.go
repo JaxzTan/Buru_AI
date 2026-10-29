@@ -1,5 +1,5 @@
 // Command simchat lets you play the scammer against a persona without Telegram. It talks to the
-// running app (BURU_MODE=live with the simulator on) over the operator API, so your messages go
+// running app (SOCKABUS_MODE=live with the simulator on) over the operator API, so your messages go
 // through the real pipeline: conversation workflow, LLM persona, extraction, stages, takeover.
 //
 //	make sim PERSONA=1               # chat with Auntie Mei as "scammer"
@@ -50,7 +50,7 @@ func (c client) do(ctx context.Context, method, path string, body, out any) erro
 	data, _ := io.ReadAll(res.Body)
 	if res.StatusCode >= 300 {
 		if res.StatusCode == http.StatusNotFound && strings.HasPrefix(path, "/internal/sim") {
-			return errors.New("simulator is off: run the app with BURU_MODE=live and BURU_ENV=local (or BURU_SIM=1)")
+			return errors.New("simulator is off: run the app with SOCKABUS_MODE=live and SOCKABUS_ENV=local (or SOCKABUS_SIM=1)")
 		}
 		return fmt.Errorf("%s %s: HTTP %d: %s", method, path, res.StatusCode, strings.TrimSpace(string(data)))
 	}
@@ -77,15 +77,15 @@ func main() {
 func run() error {
 	persona := flag.Int64("persona", 1, "persona id to chat with (make seed: 1 = Auntie Mei)")
 	as := flag.String("as", "scammer", "your scammer name; a new name starts a separate conversation")
-	base := flag.String("url", "", "app URL (default from BURU_HTTP_ADDR, e.g. http://localhost:8080)")
+	base := flag.String("url", "", "app URL (default from SOCKABUS_HTTP_ADDR, e.g. http://localhost:8080)")
 	flag.Parse()
 
-	token := os.Getenv("BURU_OPERATOR_TOKEN")
+	token := os.Getenv("SOCKABUS_OPERATOR_TOKEN")
 	if token == "" {
-		return errors.New("BURU_OPERATOR_TOKEN is not set (run through `make sim`, which loads .env)")
+		return errors.New("SOCKABUS_OPERATOR_TOKEN is not set (run through `make sim`, which loads .env)")
 	}
 	if *base == "" {
-		addr := os.Getenv("BURU_HTTP_ADDR")
+		addr := os.Getenv("SOCKABUS_HTTP_ADDR")
 		if addr == "" {
 			addr = ":8080"
 		}
@@ -111,7 +111,7 @@ func run() error {
 		return fmt.Errorf("%w\n(is `make run` running in another terminal?)", err)
 	}
 	if acct.PersonaStatus != "active" {
-		fmt.Printf("Warning: %s is %q, so she will not reply. Activate her first:\n  curl -H \"Authorization: Bearer $BURU_OPERATOR_TOKEN\" -d '{\"status\":\"active\"}' %s/internal/personas/%d/status\n\n",
+		fmt.Printf("Warning: %s is %q, so she will not reply. Activate her first:\n  curl -H \"Authorization: Bearer $SOCKABUS_OPERATOR_TOKEN\" -d '{\"status\":\"active\"}' %s/internal/personas/%d/status\n\n",
 			acct.Persona, acct.PersonaStatus, c.base, *persona)
 	}
 	fmt.Printf("Chatting with %s as \"%s\" (simulated account %d). Replies take 10-45 s, like a real person.\n", acct.Persona, *as, acct.AccountID)

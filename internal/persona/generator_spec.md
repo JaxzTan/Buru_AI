@@ -1,6 +1,6 @@
 ---
 name: honeypot-persona-generator
-description: Generates realistic, highly detailed Malaysian human personas for Qrypto / Buru AI scam-honeypot accounts, outputting a ready-to-use system prompt plus DB-ready records for the `personas` and `persona_prompt_versions` tables. Use this skill whenever the user wants to create, generate, build or batch-produce personas, honeypot identities, fake victims, bait profiles or "AI that acts like a human" — including when triggered from the frontend "Generate" button / persona endpoint, or phrases like "new persona", "make 5 personas", "generate random persona", even if the word "skill" or "honeypot" is not used.
+description: Generates realistic, highly detailed Malaysian human personas for Qrypto / Sockabus scam-honeypot accounts, outputting a ready-to-use system prompt plus DB-ready records for the `personas` and `persona_prompt_versions` tables. Use this skill whenever the user wants to create, generate, build or batch-produce personas, honeypot identities, fake victims, bait profiles or "AI that acts like a human" — including when triggered from the frontend "Generate" button / persona endpoint, or phrases like "new persona", "make 5 personas", "generate random persona", even if the word "skill" or "honeypot" is not used.
 ---
 
 # Honeypot Persona Generator
