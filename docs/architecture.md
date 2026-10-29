@@ -4,9 +4,9 @@ How Buru AI is built today, and what the v1.0 target adds. The design intent liv
 
 ## Shape
 
-A modular monolith in Go. One binary (`cmd/buru`) runs the HTTP API and the Temporal worker. Each long-running scam conversation is one Temporal workflow. The Next.js dashboard (`web/`) talks only to the Go API, never to the database.
+A modular monolith in Go. One binary (`cmd/sockabus`) runs the HTTP API and the Temporal worker. Each long-running scam conversation is one Temporal workflow. The Next.js dashboard (`web/`) talks only to the Go API, never to the database.
 
-`BURU_MODE` picks one of two runtimes:
+`SOCKABUS_MODE` picks one of two runtimes:
 
 | Mode | What runs | Storage |
 |---|---|---|
@@ -43,7 +43,7 @@ flowchart LR
 
 | Package | Role | State |
 |---|---|---|
-| `cmd/buru` | Main binary: API + Temporal worker | Built |
+| `cmd/sockabus` | Main binary: API + Temporal worker | Built |
 | `cmd/tglogin`, `cmd/tgchat`, `cmd/simchat`, `cmd/demo` | Dev tools: log in a honeypot number, play the scammer, chat without Telegram, demo runner | Built |
 | `internal/channel/telegram` | MTProto user-account connector (gotd/td) | Built |
 | `internal/channel/sim` | In-process channel for testing without Telegram | Built |
@@ -57,7 +57,7 @@ flowchart LR
 | `internal/msgcrypt` | Message encryption at rest | Built |
 | `internal/db` | sqlc-generated queries from `db/migrations` + `db/queries` | Built |
 | `internal/server` | HTTP routes for both modes, auth, `/healthz`, `/readyz` | Built |
-| `internal/config` | Env config (`BURU_*`) | Built |
+| `internal/config` | Env config (`SOCKABUS_*`) | Built |
 | `internal/engine`, `internal/demostore` | Demo-mode engine and seed data | Built |
 | `internal/intel` | Entity dedupe, verification, confidence scoring (TR-9) | Stub (`doc.go` only) |
 | `internal/tracer` | USDT tracing on TRON/Ethereum (TR-8) | Stub (`doc.go` only) |

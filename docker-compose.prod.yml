@@ -21,8 +21,8 @@ services:
     restart: unless-stopped
     ports: !reset []
     environment:
-      BURU_ENV: prod
-      BURU_TG_SESSION_DIR: /secrets/telegram
+      SOCKABUS_ENV: prod
+      SOCKABUS_TG_SESSION_DIR: /secrets/telegram
     # Session files from make tglogin; the image runs as uid 65532 (chown -R 65532:65532 .secrets/telegram).
     volumes: [./.secrets/telegram:/secrets/telegram]
 
@@ -36,7 +36,7 @@ services:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
     environment:
-      BURU_DOMAIN: ${BURU_DOMAIN:?set BURU_DOMAIN in .env}
+      SOCKABUS_DOMAIN: ${SOCKABUS_DOMAIN:?set SOCKABUS_DOMAIN in .env}
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

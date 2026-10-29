@@ -1,5 +1,5 @@
-# Reverse proxy for prod (docker-compose.prod.yml). Caddy gets the HTTPS certificate for BURU_DOMAIN itself.
-{$BURU_DOMAIN} {
+# Reverse proxy for prod (docker-compose.prod.yml). Caddy gets the HTTPS certificate for SOCKABUS_DOMAIN itself.
+{$SOCKABUS_DOMAIN} {
 	encode zstd gzip
 
 	# Bank clients and uptime checks reach the Go API directly.

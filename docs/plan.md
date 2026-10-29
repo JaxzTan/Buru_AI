@@ -18,20 +18,20 @@ Legend: `[x]` done and verified, `[~]` written, not yet verified end to end, `[ 
 
 ## Phase 1: Compose stack ready for prod (about 3 hr)
 
-- [~] 1. `Caddyfile` + `caddy` service: HTTPS for `BURU_DOMAIN`; `/v1/*`, `/healthz`, `/readyz` to `app:8080`, everything else to `web:3000` (web already proxies `/api/*`). `caddy validate` passes
+- [~] 1. `Caddyfile` + `caddy` service: HTTPS for `SOCKABUS_DOMAIN`; `/v1/*`, `/healthz`, `/readyz` to `app:8080`, everything else to `web:3000` (web already proxies `/api/*`). `caddy validate` passes
 - [~] 2. `uptime-kuma` service (`louislam/uptime-kuma:1.23.16`), volume `uptime-kuma-data`, UI on `127.0.0.1:3001` only
 - [~] 3. Temporal persists: dev server with `--db-filename` on the `temporal-data` volume (mounted at `/home/temporal`, owned by the image's uid 1000)
-- [x] 4. `docker-compose.prod.yml` overlay: no public ports except Caddy, `restart: unless-stopped`, Telegram sessions mounted at `/secrets/telegram`. `docker compose config` passes; missing `BURU_DOMAIN` fails fast
+- [x] 4. `docker-compose.prod.yml` overlay: no public ports except Caddy, `restart: unless-stopped`, Telegram sessions mounted at `/secrets/telegram`. `docker compose config` passes; missing `SOCKABUS_DOMAIN` fails fast
 - [x] 5. `make down` now runs `docker compose --profile app down`
 - [x] Extra: `POSTGRES_PASSWORD` env var (default `buru` locally); `migrate` service so the VPS needs no Go tools
 
-Done when: the prod stack boots locally with `BURU_DOMAIN=localhost` and serves the dashboard and `/healthz` through Caddy. **Pending:** image build running.
+Done when: the prod stack boots locally with `SOCKABUS_DOMAIN=localhost` and serves the dashboard and `/healthz` through Caddy. **Pending:** image build running.
 
 ## Phase 2: Server (about 2 hr)
 
 - [ ] 6. Rent a VPS (SG/MY region), install Docker, open only ports 22, 80, 443 (1 hr)
 - [ ] 7. Point a domain or subdomain at the VPS IP (15 min, plus DNS wait time)
-- [ ] 8. Create `.env` on the server only: `BURU_MODE=live`, `BURU_DOMAIN`, `POSTGRES_PASSWORD`, fresh `make keys` values, the live LLM key (15 min)
+- [ ] 8. Create `.env` on the server only: `SOCKABUS_MODE=live`, `SOCKABUS_DOMAIN`, `POSTGRES_PASSWORD`, fresh `make keys` values, the live LLM key (15 min)
 - [ ] 9. Copy `.secrets/telegram/` to the server, then `sudo chown -R 65532:65532 .secrets/telegram` (15 min)
 
 Steps: [docker.md](docker.md) → Production → First-time server setup.
