@@ -15,6 +15,7 @@ Legend: `[x]` done and verified, `[~]` written, not yet verified end to end, `[ 
 - [x] Next.js dashboard image (`web/Dockerfile`, standalone)
 - [x] `.dockerignore` keeps `.env` out of images
 - [x] CI builds the Go image (`.github/workflows/ci.yml`)
+- [x] Full local stack boots in Docker (29 Oct): `make up`, `docker compose run --rm migrate`, `docker compose --profile app up -d --build`. `/healthz`, `/readyz`, dashboard `/personas` and `/api/internal/personas` (with token) all return 200
 
 ## Phase 1: Compose stack ready for prod (about 3 hr)
 
@@ -25,7 +26,7 @@ Legend: `[x]` done and verified, `[~]` written, not yet verified end to end, `[ 
 - [x] 5. `make down` now runs `docker compose --profile app down`
 - [x] Extra: `POSTGRES_PASSWORD` env var (default `buru` locally); `migrate` service so the VPS needs no Go tools
 
-Done when: the prod stack boots locally with `SOCKABUS_DOMAIN=localhost` and serves the dashboard and `/healthz` through Caddy. **Pending:** image build running.
+Done when: the prod stack boots locally with `SOCKABUS_DOMAIN=localhost` and serves the dashboard and `/healthz` through Caddy. **Pending:** local prod-overlay boot test (paused; deployment work is on hold).
 
 ## Phase 2: Server (about 2 hr)
 
