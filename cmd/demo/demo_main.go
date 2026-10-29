@@ -26,6 +26,6 @@ func main() {
 		Handler:           server.New(nil, nil).WithDemo(demo).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	log.Printf("buru demo API listening on %s", addr)
+	log.Printf("sockabus demo API listening on %s", addr)
 	log.Fatal(srv.ListenAndServe())
 }

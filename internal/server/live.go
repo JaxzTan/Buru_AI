@@ -168,7 +168,7 @@ func fail(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusGatewayTimeout
 	case errors.Is(err, llm.ErrNoClient):
 		status = http.StatusServiceUnavailable
-		err = errors.New("no LLM configured: set GEMINI_API_KEY (or BURU_LLM_PROVIDER=anthropic with ANTHROPIC_API_KEY)")
+		err = errors.New("no LLM configured: set GEMINI_API_KEY (or SOCKABUS_LLM_PROVIDER=anthropic with ANTHROPIC_API_KEY)")
 	}
 	msg := err.Error()
 	if status == http.StatusInternalServerError {
@@ -337,7 +337,7 @@ func (a *liveAPI) bindAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := map[string]any{"account": acct, "connected": false}
 	if a.connect == nil {
-		resp["connect_error"] = "Telegram connector disabled: set BURU_TG_APP_ID and BURU_TG_APP_HASH and restart"
+		resp["connect_error"] = "Telegram connector disabled: set SOCKABUS_TG_APP_ID and SOCKABUS_TG_APP_HASH and restart"
 	} else {
 		if err := a.connect(context.WithoutCancel(r.Context()), acct); err != nil {
 			resp["connect_error"] = err.Error()
@@ -359,7 +359,7 @@ func (a *liveAPI) connectAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.connect == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "Telegram connector disabled: set BURU_TG_APP_ID and BURU_TG_APP_HASH and restart"})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "Telegram connector disabled: set SOCKABUS_TG_APP_ID and SOCKABUS_TG_APP_HASH and restart"})
 		return
 	}
 	if err := a.connect(context.WithoutCancel(r.Context()), acct); err != nil {

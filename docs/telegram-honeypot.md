@@ -31,15 +31,15 @@ Never commit `.env` or anything in `.secrets/` (both are git-ignored). The sessi
 ```sh
 cp .env.example .env
 make keys                 # paste both lines into .env
-# in .env set: GEMINI_API_KEY, BURU_TG_APP_ID, BURU_TG_APP_HASH
-# and, while testing, BURU_TG_ONLY_FROM=@your_own_username
+# in .env set: GEMINI_API_KEY, SOCKABUS_TG_APP_ID, SOCKABUS_TG_APP_HASH
+# and, while testing, SOCKABUS_TG_ONLY_FROM=@your_own_username
 make up                   # PostgreSQL, Redis, Temporal (UI on :8233)
 make migrate-up           # applies 000001–000004
 make seed                 # operator 1, six playbooks, the four console personas (Auntie Mei = persona 1)
 make tglogin PHONE=+60XXXXXXXXX PERSONA=1
 #   → enter the login code Telegram sends to the honeypot phone (and the 2FA password if set)
 #   → binds the account to Auntie Mei in honeypot_accounts
-make run                  # BURU_MODE=live; logs "telegram account connected"
+make run                  # SOCKABUS_MODE=live; logs "telegram account connected"
 ```
 
 ## No SIM yet? Use the local chat simulator
@@ -47,13 +47,13 @@ make run                  # BURU_MODE=live; logs "telegram account connected"
 Chat with a persona from your terminal. Only the Telegram connection is simulated; the conversation workflow (≥ 10 s delays, typing), the LLM persona, extraction, stages, takeover and lookup are all real.
 
 ```sh
-# .env needs BURU_MODE=live, BURU_ENV=local, BURU_OPERATOR_TOKEN, BURU_MESSAGE_KEY, GEMINI_API_KEY
+# .env needs SOCKABUS_MODE=live, SOCKABUS_ENV=local, SOCKABUS_OPERATOR_TOKEN, SOCKABUS_MESSAGE_KEY, GEMINI_API_KEY
 make run                          # terminal 1
 make sim PERSONA=1                # terminal 2: you are the scammer, Auntie Mei replies
 make sim PERSONA=1 AS=gold_mentor # a different scammer name starts a separate conversation
 ```
 
-Takeover, verification and lookup work on simulated conversations exactly as below (`GET /internal/conversations` shows them). Simulated accounts are `honeypot_accounts` rows with phone `sim-<persona id>` and `session_ref` starting with `sim:`; the Telegram connector ignores them. Turn the simulator off with `BURU_SIM=0` (it is off by default outside `BURU_ENV=local`).
+Takeover, verification and lookup work on simulated conversations exactly as below (`GET /internal/conversations` shows them). Simulated accounts are `honeypot_accounts` rows with phone `sim-<persona id>` and `session_ref` starting with `sim:`; the Telegram connector ignores them. Turn the simulator off with `SOCKABUS_SIM=0` (it is off by default outside `SOCKABUS_ENV=local`).
 
 ## Or try Telegram's test network
 
@@ -61,15 +61,15 @@ Telegram runs a separate test network with fake numbers `99966XYYYY` (X = test D
 
 ```sh
 # in .env
-BURU_TG_TEST_DC=2
-BURU_TG_ONLY_FROM=            # leave empty on the test network (it is isolated)
+SOCKABUS_TG_TEST_DC=2
+SOCKABUS_TG_ONLY_FROM=            # leave empty on the test network (it is isolated)
 
 make tglogin PHONE=9996620001 PERSONA=1          # the honeypot (Auntie Mei); code 22222 or 222222
 make run                                          # terminal 1
 make tgchat PHONE=9996620002 TO=9996620001        # terminal 2: you, as the scammer
 ```
 
-Type in the `tgchat` terminal as the scammer; Auntie Mei's replies and "typing…" appear there. Test accounts are public (anyone can log into the same number) and the network is wiped from time to time: development only. Remove `BURU_TG_TEST_DC` before using a real SIM.
+Type in the `tgchat` terminal as the scammer; Auntie Mei's replies and "typing…" appear there. Test accounts are public (anyone can log into the same number) and the network is wiped from time to time: development only. Remove `SOCKABUS_TG_TEST_DC` before using a real SIM.
 
 ## Test it
 
@@ -80,7 +80,7 @@ Type in the `tgchat` terminal as the scammer; Auntie Mei's replies and "typing�
 4. Watch it in the operator API (token from `.env`):
 
 ```sh
-T="Authorization: Bearer $BURU_OPERATOR_TOKEN"
+T="Authorization: Bearer $SOCKABUS_OPERATOR_TOKEN"
 curl -s -H "$T" localhost:8080/internal/conversations | jq          # stage, scam_type, status
 curl -s -H "$T" localhost:8080/internal/conversations/1 | jq        # decrypted messages + entities
 curl -s -H "$T" 'localhost:8080/internal/entities?status=unverified' | jq   # verification queue
@@ -121,7 +121,7 @@ Generated demo identifiers are masked on purpose (MyKad place-of-birth code `00`
 
 ## Operator API (live mode)
 
-All routes need `Authorization: Bearer $BURU_OPERATOR_TOKEN`.
+All routes need `Authorization: Bearer $SOCKABUS_OPERATOR_TOKEN`.
 
 | Method | Path | Does |
 |---|---|---|
@@ -151,9 +151,9 @@ Scammer text comes back as plain JSON strings. The dashboard must render it as t
 | Symptom | Fix |
 |---|---|
 | `telegram account stopped: re-login needed or account banned` | Run `make tglogin` again. If Telegram says the number is banned, set the account to `banned` and use another SIM. |
-| Persona never replies | Is the persona `active`? Is your username in `BURU_TG_ONLY_FROM`? Check the Temporal UI for activity errors. |
+| Persona never replies | Is the persona `active`? Is your username in `SOCKABUS_TG_ONLY_FROM`? Check the Temporal UI for activity errors. |
 | Replies are generic playbook lines | `GEMINI_API_KEY` is missing or the call failed; the log says `persona LLM unavailable`. |
-| `no session file` on start | The session lives in `BURU_TG_SESSION_DIR`; run `make tglogin` from the same folder you run `make run` from. |
+| `no session file` on start | The session lives in `SOCKABUS_TG_SESSION_DIR`; run `make tglogin` from the same folder you run `make run` from. |
 | Messages sent while the app was down are not answered | Known MVP limit: gotd update state is in memory. The persona picks up the next message. |
 
 ## Tests

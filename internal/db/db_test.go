@@ -1,7 +1,7 @@
 package db_test
 
 // Integration tests against real PostgreSQL with migrations applied (TRD §9).
-// Run: make test-db   (skipped when BURU_TEST_POSTGRES_URL is unset)
+// Run: make test-db   (skipped when SOCKABUS_TEST_POSTGRES_URL is unset)
 
 import (
 	"context"
@@ -18,9 +18,9 @@ import (
 
 // setup returns queries inside a transaction that is rolled back after the test.
 func setup(t *testing.T) (context.Context, *db.Queries, pgx.Tx) {
-	url := os.Getenv("BURU_TEST_POSTGRES_URL")
+	url := os.Getenv("SOCKABUS_TEST_POSTGRES_URL")
 	if url == "" {
-		t.Skip("BURU_TEST_POSTGRES_URL not set")
+		t.Skip("SOCKABUS_TEST_POSTGRES_URL not set")
 	}
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, url)
@@ -46,7 +46,7 @@ func must[T any](v T, err error) T {
 // seedConversation creates operator → persona → account → conversation → one inbound message.
 func seedConversation(t *testing.T, ctx context.Context, q *db.Queries) (db.Operator, db.Conversation, db.InsertMessageRow) {
 	t.Helper()
-	op := must(q.CreateOperator(ctx, db.CreateOperatorParams{Email: "op@buru.test", Role: db.OperatorRoleOperator, TotpSecretRef: "vault:op"}))
+	op := must(q.CreateOperator(ctx, db.CreateOperatorParams{Email: "op@sockabus.test", Role: db.OperatorRoleOperator, TotpSecretRef: "vault:op"}))
 	p := must(q.CreatePersona(ctx, db.CreatePersonaParams{Name: "Auntie Mei", LanguageMix: json.RawMessage(`{"en":0.5,"hokkien":0.5}`)}))
 	acc := must(q.CreateHoneypotAccount(ctx, db.CreateHoneypotAccountParams{PersonaID: p.ID, Channel: db.ChannelTelegram, Phone: "+60120000001", SessionRef: "vault:s1"}))
 	c := must(q.CreateConversation(ctx, db.CreateConversationParams{AccountID: acc.ID, TemporalWorkflowID: "wf-1", ScammerHandle: "@scammer"}))

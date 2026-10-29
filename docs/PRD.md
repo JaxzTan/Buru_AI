@@ -1,19 +1,21 @@
-# PRD: Buru AI — Scam Intelligence Network for Southeast Asia
+# PRD: Sockabus — Scam Intelligence Network for Southeast Asia
 
 | Field | Value |
 |---|---|
 | Author | Jaxz Tan |
-| Status | Draft |
-| Version | 0.2 |
-| Last updated | 23 Oct 2026 |
-| Related TRD | [TRD.md](TRD.md) (v0.3) |
+| Status | Baseline for v1.0 build |
+| Version | 1.0 |
+| Last updated | 26 Oct 2026 |
+| Related | [TRD.md](TRD.md) · [sockabus-v1-blueprint.md](sockabus-v1-blueprint.md) · [sockabus-v1-tasks.md](sockabus-v1-tasks.md) |
 
 **Revision history**
 
 | Version | Date | Changes |
 |---|---|---|
 | 0.1 | 21 Oct 2026 | First draft. |
-| 0.2 | 23 Oct 2026 | Aligned with TRD v0.3: confidence is a level (low/medium/high), not a raw score; "loan" added as a scam type; batch lookup added to FR-10; persona lifecycle added to FR-1; Hokkien added to FR-1 to match NFR-6; audit records made tamper-proof in NFR-8; retention periods added to NFR-4; Telegram-first question marked decided. |
+| 0.2 | 23 Oct 2026 | Aligned with TRD 0.3: confidence levels, "loan" scam type, batch lookup, persona lifecycle, Hokkien, tamper-proof audit, retention, Telegram-first decided. |
+| 1.0 | 26 Oct 2026 | Renamed to Buru AI. Added §10 v1.0 release (bank demo, 2 Nov 2026). Added FR-15 one-click persona generation, NFR-9 monitoring, NFR-10 automated testing, NFR-11 deployment. Telegram fallback decision recorded. |
+| 1.0.1 | 28 Oct 2026 | Renamed to Sockabus. |
 
 ## 1. Problem statement
 
@@ -27,6 +29,8 @@ Scam syndicates in Southeast Asia run industrial-scale operations through WhatsA
 | Personas are convincing | % of conversations where scammer reaches the "payment request" stage | ≥ 40% |
 | Intelligence is useful to customers | % of API lookups returning a match that the customer confirms as true fraud | ≥ 85% precision |
 | Commercial traction | Paying B2B customers (pilot or contract) | ≥ 3 |
+
+**v1.0 goal (2 Nov 2026):** a working live demo that convinces a bank to discuss a paid pilot. See §10.
 
 ## 3. Non-goals / Out of scope (v1)
 
@@ -43,7 +47,7 @@ Scam syndicates in Southeast Asia run industrial-scale operations through WhatsA
 |---|---|---|
 | **Farah — Fraud analyst, digital bank / e-wallet** | Reviews suspicious transfers daily; blocklists are stale. | Real-time check: "Is this recipient account linked to a scam?" |
 | **Wei Ming — Risk lead, crypto exchange** | Sees deposits from scam victims and withdrawals to scam wallets. | Wallet addresses and fund-flow evidence tied to known scams. |
-| **Operator (internal)** | Buru AI staff running personas and honeypots. | Monitor conversations, intervene, verify extracted data. |
+| **Operator (internal)** | Sockabus staff running personas and honeypots. | Create personas fast, monitor conversations, intervene, verify extracted data, know immediately when the bot is down. |
 
 ## 5. User stories & functional requirements
 
@@ -56,6 +60,7 @@ Scam syndicates in Southeast Asia run industrial-scale operations through WhatsA
 | FR-3 | As a persona, I want to reply with human-like timing, typos and hesitation so that scammers don't detect automation. | Must | Replies delayed by a configurable randomised range; no reply faster than 10 s. |
 | FR-4 | As an operator, I want the persona to steer conversations toward payment details so that we capture mule accounts and wallets. | Must | Conversation playbooks per scam type; ≥ 40% of conversations reach payment-request stage (see Goal 2). |
 | FR-5 | As an operator, I want to take over or pause any conversation so that I can handle edge cases. | Should | Takeover from dashboard in 1 click; bot stops replying immediately. Messages sent by an operator are recorded as operator messages. |
+| FR-15 | As an operator, I want to generate a random, realistic persona with one click so that I can spin up new honeypots without writing backstories by hand. | Must | "Generate persona" button in the dashboard creates a complete persona (name, age, location, language mix, backstory, wealth profile, system prompt) as a `draft` in < 30 s. Each click gives a different persona. Generated personas never contain real people's identifiers. |
 
 ### Epic B — Intelligence extraction
 
@@ -79,26 +84,27 @@ Scam syndicates in Southeast Asia run industrial-scale operations through WhatsA
 ## 6. User flow
 
 **Intelligence pipeline (core value):**
-1. Operator creates persona "Auntie Mei, 62, retired, Penang, Hokkien + English, has savings".
-2. Persona is bound to honeypot Telegram/WhatsApp accounts and seeded into scam channels.
+1. Operator clicks "Generate persona" → persona "Auntie Mei, 62, retired, Penang, Hokkien + English, has savings" is created and activated.
+2. Persona is bound to a honeypot Telegram account and seeded into scam channels.
 3. Scammer messages persona → bot engages following the matching scam playbook.
 4. Scammer asks for payment → bot asks "which account ah?" → scammer shares bank account / wallet.
-5. System extracts entities, classifies scam type, traces wallet on-chain.
+5. System extracts entities and classifies scam type.
 6. Operator verifies entities.
 7. **Customer's fraud system calls the lookup API on an outgoing transfer → match found → transfer held.** ← most important interaction
 
 ```mermaid
 flowchart LR
+  G[Generate persona] --> P[AI persona]
   S[Scammer] -->|messages| H[Honeypot account]
-  H --> P[AI persona]
+  H --> P
   P -->|steers to payment| S
   P --> X[Entity extraction]
-  X --> T[On-chain tracing]
   X --> V[Operator verification]
   V --> DB[(Intel DB)]
   DB --> API[Lookup API]
-  DB --> W[Webhooks / Dashboard]
   API --> C[Bank / e-wallet / exchange]
+  M[Monitoring] -.watches.-> H
+  M -.watches.-> API
 ```
 
 ## 7. Non-functional requirements
@@ -113,6 +119,9 @@ flowchart LR
 | NFR-6 | Localisation | Personas support BM, English, Mandarin, Cantonese, Hokkien phrases and code-switching. | Core differentiator. |
 | NFR-7 | Reliability | Lookup API availability ≥ 99.5%. | Customer integration dependency. |
 | NFR-8 | Auditability | Every entity is traceable to its source conversation and verifier. Messages, sightings and verification decisions cannot be edited or deleted once recorded. | Evidence quality for customers and authorities. |
+| NFR-9 | Monitoring | Every public endpoint and the honeypot bot are monitored. The operator is alerted within 2 minutes if an endpoint is down or the bot stops (disconnected, crashed or silent). The dashboard shows bot status: connected yes/no, last message received, recent LLM errors. | A honeypot that is silently down captures nothing; banks will ask how we know we're up. |
+| NFR-10 | Quality | Every step of the demo flow is covered by automated tests (API and UI) that run on every pull request; a pull request cannot merge with failing tests. | Small team, fast changes; prevents demo-day breakage. |
+| NFR-11 | Deployment | Backend, bot and dashboard run on a server that is online 24/7, deployed from the main branch with one command or pipeline. | Honeypot must catch messages around the clock; a laptop sleeps. |
 
 ## 8. Assumptions & open questions
 
@@ -126,13 +135,16 @@ flowchart LR
 
 | Question | Decision | Date |
 |---|---|---|
-| Telegram first, WhatsApp first, or both? | Telegram first (M1); WhatsApp connector in M4. | 23 Oct 2026 |
+| Telegram first, WhatsApp first, or both? | Telegram first; WhatsApp after v1. | 23 Oct 2026 |
+| What if the Telegram connector isn't ready for the demo? | Decision point Fri 30 Oct, 12:00. If Telegram can't receive and reply reliably, the demo uses a simple web chat page instead. | 26 Oct 2026 |
+| What does the bank see in v1.0? | A live demo run by the team, followed by a sales ask. No customer self-service access in v1.0. | 26 Oct 2026 |
 
 **Open questions**
 
 | Question | Owner | Decide by |
 |---|---|---|
-| Pricing: per lookup, monthly subscription, or tiered? | Jaxz | Before first pilot |
+| Which phone number / SIM is the honeypot account? | Team | Team meeting, before Tue 27 Oct |
+| Pricing: per lookup, monthly subscription, or tiered? | Jaxz + mentor | Before bank meeting |
 | Do we share intelligence with NSRC / police for free (credibility) or only via customers? | Jaxz + legal advisor | Before M3 |
 | Company structure and legal advisor | Jaxz | Before M3 |
 | Confirm data retention periods (24 months entities, 12 months messages). | Jaxz + legal advisor | Before M3 |
@@ -141,8 +153,34 @@ flowchart LR
 
 | Milestone | Scope | Target |
 |---|---|---|
-| M1 — Persona prototype | FR-1, FR-2, FR-3 (Telegram, 3 personas) | Week 4 |
-| M2 — Intelligence MVP | FR-4, FR-5, FR-6, FR-7, FR-9 + internal dashboard | Week 10 |
-| M3 — Customer pilot | FR-10, FR-13, NFR-1, NFR-3, NFR-5 — first pilot customer | Week 16 |
-| M4 — Pilot-to-paid | FR-8, FR-11, FR-12, WhatsApp connector | Week 24 |
-| Stretch | FR-14, WhatsApp scale-out, Singapore | After M4 |
+| **v1.0 — Bank demo** | See §10 | **2 Nov 2026** |
+| M3 — Customer pilot | FR-10 full, FR-13, NFR-1, NFR-3, NFR-5 — first pilot customer | After bank meeting |
+| M4 — Pilot-to-paid | FR-8, FR-11 full, FR-12 | After M3 |
+| Stretch | FR-14, WhatsApp, Singapore | After M4 |
+
+## 10. v1.0 release — bank demo (2 Nov 2026)
+
+**Audience:** a bank, together with our mentor, the week of 2 Nov 2026. **Format:** live demo from a laptop against the deployed server, then a sales conversation.
+
+**What v1.0 must do (demo path):**
+
+| # | Demo step | Requirements |
+|---|---|---|
+| 1 | Generate a persona with one click | FR-15, FR-1 |
+| 2 | A teammate playing a scammer chats with the persona on Telegram (fallback: web chat page) | FR-2, FR-3, FR-4 |
+| 3 | The operator watches the chat live and can take over | FR-5 |
+| 4 | The scammer's bank account / wallet appears as an extracted entity | FR-6, FR-7 |
+| 5 | The operator verifies it | FR-9 |
+| 6 | A bank simulator page checks a transfer and gets a match → transfer held | FR-10 (single lookup) |
+| 7 | The status page shows the bot and endpoints are healthy | NFR-9 |
+
+Every step is covered by automated tests (NFR-10) and runs on the deployed server (NFR-11).
+
+**In v1.0 but simplified:**
+- FR-10: single lookup only; uses the shared operator token instead of per-customer keys.
+- FR-11: entity list with basic filters, no trend chart or CSV.
+- FR-13: not in v1.0 (no customer self-service).
+
+**Not in v1.0:** FR-8 chain tracer, FR-12 webhooks, FR-14 evidence reports, WhatsApp, per-customer API keys, operator email + TOTP login, KMS-backed encryption.
+
+**What we say to the bank about customisation:** the engine (personas, extraction, verification) is fixed; what's adjustable per bank is which entity types they check, the lookup response fields, batch size, alerts (webhooks) and how they connect (API or dashboard). Their requests feed v1.1.

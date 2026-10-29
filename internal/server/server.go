@@ -21,7 +21,7 @@ type Server struct {
 	redis *redis.Client
 	demo  *demostore.Store // optional: live demo data
 	eng   *engine.Engine
-	live  *liveAPI // BURU_MODE=live: PostgreSQL-backed API (takes precedence over demo)
+	live  *liveAPI // SOCKABUS_MODE=live: PostgreSQL-backed API (takes precedence over demo)
 }
 
 // WithLive serves the PostgreSQL-backed operator API (/internal/*) and lookup (/v1/lookup).
@@ -45,11 +45,11 @@ func New(db *pgxpool.Pool, rdb *redis.Client) *Server {
 }
 
 // WithDemo enables the console + portal APIs, and starts the scripted scammer simulator
-// (set BURU_SIMULATE=0 to disable it).
+// (set SOCKABUS_SIMULATE=0 to disable it).
 func (s *Server) WithDemo(st *demostore.Store) *Server {
 	s.demo = st
 	s.eng = engine.New(st)
-	if os.Getenv("BURU_SIMULATE") != "0" {
+	if os.Getenv("SOCKABUS_SIMULATE") != "0" {
 		go s.eng.RunSimulator(context.Background())
 	}
 	return s

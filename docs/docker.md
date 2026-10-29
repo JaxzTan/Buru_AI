@@ -8,9 +8,9 @@ Docker runs the local development stack and, for v1.0, the production stack on o
 |---|---|
 | `docker-compose.yml` | Local stack: 3 dependencies + 2 app containers + `migrate` tool |
 | `docker-compose.prod.yml` | Prod overlay: Caddy, Uptime Kuma, persistent Temporal, no public database ports |
-| `Caddyfile` | HTTPS reverse proxy for `BURU_DOMAIN` |
+| `Caddyfile` | HTTPS reverse proxy for `SOCKABUS_DOMAIN` |
 | `scripts/backup.sh`, `scripts/restore-test.sh` | Nightly `pg_dump` and restore check |
-| `Dockerfile` | Go API image (`cmd/buru`) |
+| `Dockerfile` | Go API image (`cmd/sockabus`) |
 | `web/Dockerfile` | Next.js dashboard image |
 | `.dockerignore`, `web/.dockerignore` | Keep `.env`, `.git`, `node_modules` and `.next` out of builds |
 
@@ -47,7 +47,7 @@ Container names are fixed (`container_name`), so they must be unique on your mac
 
 | Container | Reachable from | Notes |
 |---|---|---|
-| `caddy` | Internet, ports 80 and 443 | Gets a Let's Encrypt certificate for `BURU_DOMAIN`. `/v1/*`, `/healthz`, `/readyz` go to `app`; everything else goes to `web` |
+| `caddy` | Internet, ports 80 and 443 | Gets a Let's Encrypt certificate for `SOCKABUS_DOMAIN`. `/v1/*`, `/healthz`, `/readyz` go to `app`; everything else goes to `web` |
 | `app`, `web`, `postgres`, `redis` | Docker network only | No host ports |
 | `temporal` | `127.0.0.1:8233` (UI) | Workflow history is in a SQLite file on the `temporal-data` volume, so it survives restarts |
 | `uptime-kuma` | `127.0.0.1:3001` | Monitoring UI. Data in the `uptime-kuma-data` volume |
@@ -57,7 +57,7 @@ All containers use `restart: unless-stopped`, so they come back after a crash or
 **First-time server setup**
 1. Install Docker and Git; open only ports 22, 80 and 443.
 2. `git clone` the repo to `/opt/buru`.
-3. `cp .env.example .env`, then set `BURU_MODE=live`, `BURU_DOMAIN`, `POSTGRES_PASSWORD` (`openssl rand -hex 24`), `make keys` values, the LLM key and the Telegram values.
+3. `cp .env.example .env`, then set `SOCKABUS_MODE=live`, `SOCKABUS_DOMAIN`, `POSTGRES_PASSWORD` (`openssl rand -hex 24`), `make keys` values, the LLM key and the Telegram values.
 4. Copy `.secrets/telegram/` from your laptop, then `sudo chown -R 65532:65532 .secrets/telegram` (the app image runs as uid 65532).
 5. Point the domain's DNS A record at the server.
 6. `make deploy`, then `make seed` once.
@@ -77,7 +77,7 @@ Backups go to `backups/` and are kept for 14 days. Set `BACKUP_REMOTE` (an rclon
 ## Images
 
 **Go API (`Dockerfile`)**
-1. `golang:1.26-alpine` builds a static binary from `./cmd/buru`.
+1. `golang:1.26-alpine` builds a static binary from `./cmd/sockabus`.
 2. `gcr.io/distroless/static-debian12:nonroot` runs it: no shell, non-root user, about 49 MB.
 
 **Web (`web/Dockerfile`)**
@@ -85,13 +85,13 @@ Backups go to `backups/` and are kept for 14 days. Set `BACKUP_REMOTE` (an rclon
 2. `build`: `pnpm build` with `output: "standalone"` (`web/next.config.ts`).
 3. Runtime: `node:24-alpine` runs `server.js` as the `node` user, about 290 MB.
 
-The Go API address is baked in at build time (`BURU_API_URL` build arg, default `http://app:8080`), because Next.js fixes rewrites during `next build`. Changing it means rebuilding the `web` image.
+The Go API address is baked in at build time (`SOCKABUS_API_URL` build arg, default `http://app:8080`), because Next.js fixes rewrites during `next build`. Changing it means rebuilding the `web` image.
 
 ## Configuration and secrets
 
-- The `app` container reads `.env` through `env_file`, then overrides `BURU_POSTGRES_URL`, `BURU_REDIS_ADDR` and `BURU_TEMPORAL_HOSTPORT` to point at the other containers.
+- The `app` container reads `.env` through `env_file`, then overrides `SOCKABUS_POSTGRES_URL`, `SOCKABUS_REDIS_ADDR` and `SOCKABUS_TEMPORAL_HOSTPORT` to point at the other containers.
 - `.env` is never copied into an image (`.dockerignore`).
-- To run the `app` container against Supabase, remove the `BURU_POSTGRES_URL` override and use the Supabase **Session pooler** URL. The direct host (`db.<ref>.supabase.co`) is IPv6-only, and Docker Desktop cannot reach it.
+- To run the `app` container against Supabase, remove the `SOCKABUS_POSTGRES_URL` override and use the Supabase **Session pooler** URL. The direct host (`db.<ref>.supabase.co`) is IPv6-only, and Docker Desktop cannot reach it.
 
 ## Troubleshooting
 
@@ -99,9 +99,9 @@ The Go API address is baked in at build time (`BURU_API_URL` build arg, default 
 |---|---|---|
 | `container name "/postgres" is already in use` | Another container has that name | `docker rm -f postgres`, or rename in `docker-compose.yml` |
 | `/api/*` returns 500 from `web` | `app` is not running or not healthy | `docker compose logs app` |
-| `/readyz` shows a postgres error | Database not ready or wrong URL | `docker compose ps postgres`; check `BURU_POSTGRES_URL` |
+| `/readyz` shows a postgres error | Database not ready or wrong URL | `docker compose ps postgres`; check `SOCKABUS_POSTGRES_URL` |
 | Web still shows old UI | Image not rebuilt | `docker compose --profile app up -d --build web` |
 | Port already allocated | Something on the host uses 5432, 6379, 8080 or 3000 | Stop it, or change the left side of `ports:` |
-| `required variable BURU_DOMAIN is missing` | Prod overlay without a domain | Set `BURU_DOMAIN` in `.env` |
+| `required variable SOCKABUS_DOMAIN is missing` | Prod overlay without a domain | Set `SOCKABUS_DOMAIN` in `.env` |
 | Caddy logs certificate errors | DNS does not point at the server yet, or port 80 is blocked | Fix the A record or firewall; Caddy retries on its own |
 | Telegram `permission denied` on session files | Session files owned by your user, not uid 65532 | `sudo chown -R 65532:65532 .secrets/telegram` |
