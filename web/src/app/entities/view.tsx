@@ -116,7 +116,7 @@ export function EntitiesView() {
                       </Link>
                     ) : (
                       <span className="muted" style={{ fontSize: 15 }}>
-                        Seed data
+                        {e.sample ? "Seed data" : "No chat linked"}
                       </span>
                     )}
                   </td>

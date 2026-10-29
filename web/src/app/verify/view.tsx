@@ -74,9 +74,12 @@ export function VerifyView() {
   const src = c ? c.msgs.findIndex((m) => (m.who === "scammer" && digits(m.text).includes(digits(e.value))) || m.text.includes(e.value)) : -1;
   const lines = c && src > -1 ? c.msgs.slice(Math.max(0, src - 1), src + 1) : [];
   const late = (e.stageAt ?? 0) >= 2;
+  const stageKnown = e.stageAt !== undefined;
   const checks: [boolean, string][] = [
     [true, "Sent by the scammer, not the persona"],
-    [late, late ? "Sent during the Payment request stage" : "Sent before the Payment request stage — check the context"],
+    stageKnown
+      ? [late, late ? "Sent during the Payment request stage" : "Sent before the Payment request stage — check the context"]
+      : [false, "Stage at capture not reported — check the excerpt"],
     [true, e.type === "bank_account" ? `Valid length for a ${BANKS[e.bank] ?? e.bank} account number` : e.type === "wallet" ? "Valid TRON address format" : "Valid format"],
     [e.sightings > 1, e.sightings > 1 ? `Seen in ${e.sightings} conversations` : "Seen in only 1 conversation so far — check the excerpt"],
   ];
@@ -141,7 +144,7 @@ export function VerifyView() {
             </div>
             <div>
               <span className="caps muted">Source</span>
-              <b>{c && p ? `${c.scammer} → ${p.name}` : "Seed data"}</b>
+              <b>{c && p ? `${c.scammer} → ${p.name}` : e.sample ? "Seed data" : "Chat not found"}</b>
             </div>
             <div>
               <span className="caps muted">Channel</span>
@@ -178,7 +181,7 @@ export function VerifyView() {
             ) : (
               <>
                 <span className="caps muted">Source excerpt</span>
-                <span className="muted">Sample entity, no chat attached.</span>
+                <span className="muted">{e.sample ? "Sample entity, no chat attached." : "No source message found for this entity."}</span>
               </>
             )}
           </div>

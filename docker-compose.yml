@@ -55,6 +55,8 @@ services:
       context: ./web
       args:
         SOCKABUS_API_URL: http://app:8080 # browser calls /api/*, Next proxies to the app container
+    environment:
+      SOCKABUS_OPERATOR_TOKEN: ${SOCKABUS_OPERATOR_TOKEN:-} # added by the /api proxy, never sent to the browser
     ports: ["3000:3000"]
     depends_on: [app]
 

@@ -1,8 +1,9 @@
 "use client";
 import { useRef, useState, type ReactNode } from "react";
 import { Badge, Head, Spin } from "@/components/ui";
+import { stamp } from "@/lib/api";
 import { BANKS, digits, plural } from "@/lib/format";
-import { cancelTransfer, clearLookup, fillBank, runLookup, setBankDraft, useStore } from "@/lib/store";
+import { cancelTransfer, clearLookup, fillBank, runLookup, setBankDraft, USE_SAMPLE, useStore } from "@/lib/store";
 import type { Confidence } from "@/lib/types";
 
 export function BankView() {
@@ -11,8 +12,10 @@ export function BankView() {
   const acctRef = useRef<HTMLInputElement>(null);
   const d = data.bank;
   const L = data.lastLookup;
-  const e = L?.entityId ? data.entities.find((x) => x.id === L.entityId) : undefined;
-  const captured = data.entities.filter((x) => x.type === "bank_account" && !x.sample).at(-1);
+  const scam = L?.res.scam_types?.[0] ?? "other";
+  // Newest captured account: sample data appends, the API lists newest first.
+  const accts = data.entities.filter((x) => x.type === "bank_account" && !x.sample);
+  const captured = USE_SAMPLE ? accts.at(-1) : accts[0];
 
   const edit = () => {
     clearLookup();
@@ -29,7 +32,24 @@ export function BankView() {
         </div>
       </div>
     );
-  } else if (L?.result === "held" && e) {
+  } else if (ui.lookupError) {
+    result = (
+      <div className="result held" data-testid="result-error" role="alert">
+        <div className="rh">
+          <span className="ic">!</span>
+          <div>
+            <h2>Check failed</h2>
+            <p>{ui.lookupError} The transfer was not sent.</p>
+          </div>
+        </div>
+        <div className="row-gap">
+          <button className="btn btn-primary" onClick={runLookup}>
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  } else if (L?.result === "held") {
     result = (
       <div className="result held" data-testid="result-held" role="alert">
         <div className="rh">
@@ -37,7 +57,7 @@ export function BankView() {
           <div>
             <h2>Transfer held</h2>
             <p>
-              This account is linked to a <b>{e.scam}</b> scam. Your RM {L.amt} has not left your account.
+              This account is linked to a <b>{scam}</b> scam. Your RM {L.amt} has not left your account.
             </p>
           </div>
         </div>
@@ -48,15 +68,15 @@ export function BankView() {
           </div>
           <div>
             <span className="caps muted">Scam type</span>
-            <b style={{ textTransform: "capitalize" }}>{e.scam}</b>
+            <b style={{ textTransform: "capitalize" }}>{scam}</b>
           </div>
           <div>
             <span className="caps muted">Seen</span>
-            <b>{plural(e.sightings, "time")}</b>
+            <b>{plural(L.res.sightings ?? 1, "time")}</b>
           </div>
           <div>
             <span className="caps muted">First seen</span>
-            <b>{e.first}</b>
+            <b>{stamp(L.res.first_seen)}</b>
           </div>
           <div>
             <span className="caps muted">Checked in</span>

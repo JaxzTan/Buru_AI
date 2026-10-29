@@ -1,18 +1,40 @@
 "use client";
-// Demo data store. Data lives in the browser (localStorage) until the Go API is wired in.
-// Each exported action is one swap point (spec Area 6):
-//   generatePersona → POST /internal/personas/generate     setPersonaStatus → POST /internal/personas/{id}/status
-//   scammerSends    → POST /internal/sim/messages (dev)     takeover/handback → POST /internal/conversations/{id}/takeover
-//   operatorSend    → POST …/operator-message               decide → POST /internal/entities/{id}/verify
-//   runLookup       → POST /v1/lookup via a server route, so the token stays server-side
+// Console data store. Two sources behind one shape (Data), so the screens don't care which:
+//   NEXT_PUBLIC_USE_SAMPLE_DATA=true → sample data in the browser (localStorage), sim.ts stand-ins.
+//   otherwise                        → the Go API through the /api proxy, polled every 3 s.
+// Real calls (spec Area 6.3; paths and fields from internal/server/live.go):
+//   generatePersona  → POST /internal/personas/generate     setPersonaStatus → POST /internal/personas/{id}/status
+//   scammerSends     → POST /internal/sim/accounts + /internal/sim/messages (dev chat simulator)
+//   takeover/handback → POST /internal/conversations/{id}/takeover   operatorSend → POST …/operator-message
+//   decide           → POST /internal/entities/{id}/verify after the Undo window (§4.5)
+//   runLookup        → POST /api/demo/lookup (Next server route) → POST /v1/lookup; token stays server-side
+//   reads            → GET /internal/personas, /accounts, /conversations, /conversations/{id}, /entities, /readyz
 // View state (selection, filters) is in the URL, not here (spec §4.2).
 import { useSyncExternalStore } from "react";
+import {
+  api,
+  ApiError,
+  toConversation,
+  toEntity,
+  toPersona,
+  type ApiAccount,
+  type ApiConversation,
+  type ApiConversationDetail,
+  type ApiEntity,
+  type ApiGenerateResult,
+  type ApiLookupResult,
+  type ApiPersona,
+} from "./api";
 import { clock, groupAcct, showVal, today, typeLabel } from "./format";
 import { GENERATED, SEED_CONVOS, SEED_ENTITIES, SEED_PERSONAS } from "./seed";
 import { classify, extract, lookup, personaReply } from "./sim";
 import type { BankDraft, Conversation, Entity, Lookup, PersonaStatus } from "./types";
 
-const KEY = "sockabus-console-v1";
+export const USE_SAMPLE = process.env.NEXT_PUBLIC_USE_SAMPLE_DATA === "true";
+
+// Sample mode saves all data; API mode saves only per-browser conveniences (bank form, script ticks...).
+const KEY = USE_SAMPLE ? "sockabus-console-v1" : "sockabus-console-api-v1";
+const LOCAL_KEYS = ["usedScript", "lastLookup", "bank", "genIds"] as const;
 
 export interface Data {
   personas: typeof SEED_PERSONAS;
@@ -23,6 +45,7 @@ export interface Data {
   usedScript: number[];
   lastLookup: Lookup | null;
   bank: BankDraft;
+  genIds: string[]; // personas made with "Generate persona" in this browser (drives the demo path)
 }
 
 export interface Toast {
@@ -37,13 +60,26 @@ export interface Toast {
 
 type ToastAction = { label: string; href?: string; run?: () => void; testId?: string };
 
+export interface Health {
+  ok: boolean;
+  status: number; // HTTP status of GET /readyz, 0 = unreachable
+  checks: Record<string, string>;
+  ms: number;
+}
+
 interface UI {
   generating: boolean;
-  genError: boolean;
+  genError: string | null;
+  genErrorSetup: boolean; // 503: the server has no AI model set up, so retrying won't help
   checking: boolean;
+  lookupError: string | null;
   typing: Record<string, boolean>;
   lastSync: number;
   toasts: Toast[];
+  loaded: boolean; // first API load finished (always true in sample mode)
+  loadError: string | null; // last API load failed with this message
+  accounts: ApiAccount[]; // honeypot accounts (API mode; Status screen)
+  health: Health | null;
 }
 
 export interface State {
@@ -60,23 +96,42 @@ const seed = (): Data => ({
   usedScript: [],
   lastLookup: null,
   bank: { bank: "MBB", acct: "", amt: "150.00" },
+  genIds: [],
 });
 
-const freshUI = (lastSync: number): UI => ({ generating: false, genError: false, checking: false, typing: {}, lastSync, toasts: [] });
+const empty = (): Data => ({ ...seed(), personas: [], convos: [], entities: [] });
+const initial = () => (USE_SAMPLE ? seed() : empty());
 
-const SERVER: State = { data: seed(), ui: freshUI(0) };
+const freshUI = (lastSync: number): UI => ({
+  generating: false,
+  genError: null,
+  genErrorSetup: false,
+  checking: false,
+  lookupError: null,
+  typing: {},
+  lastSync,
+  toasts: [],
+  loaded: USE_SAMPLE,
+  loadError: null,
+  accounts: [],
+  health: null,
+});
+
+const SERVER: State = { data: initial(), ui: freshUI(0) };
 let state: State | null = null;
 const listeners = new Set<() => void>();
 
+const saved = (d: Data): Partial<Data> => (USE_SAMPLE ? d : Object.fromEntries(LOCAL_KEYS.map((k) => [k, d[k]])));
+
 function load(): State {
-  let data = seed();
+  let data = initial();
   try {
-    const saved = window.localStorage.getItem(KEY);
-    if (saved) data = { ...data, ...JSON.parse(saved) };
+    const raw = window.localStorage.getItem(KEY);
+    if (raw) data = { ...data, ...JSON.parse(raw) };
   } catch {
-    // private window or blocked storage: start from the seed
+    // private window or blocked storage: start fresh
   }
-  return { data, ui: freshUI(Date.now()) };
+  return { data, ui: freshUI(USE_SAMPLE ? Date.now() : 0) };
 }
 
 const get = () => (state ??= load());
@@ -84,9 +139,9 @@ const get = () => (state ??= load());
 function set(fn: (s: State) => State, persist = false) {
   state = fn(get());
   if (persist) {
-    state = { ...state, ui: { ...state.ui, lastSync: Date.now() } };
+    if (USE_SAMPLE) state = { ...state, ui: { ...state.ui, lastSync: Date.now() } };
     try {
-      window.localStorage.setItem(KEY, JSON.stringify(state.data));
+      window.localStorage.setItem(KEY, JSON.stringify(saved(state.data)));
     } catch {
       // storage full or blocked: keep going in memory
     }
@@ -143,9 +198,121 @@ export function toast(msg: string, action?: ToastAction, opts: { ms?: number; er
 }
 export const dismissToast = (id: number) => setUI((u) => ({ toasts: u.toasts.filter((t) => t.id !== id) }));
 
+const errMsg = (err: unknown) => (err instanceof Error && err.message ? err.message : "Something went wrong");
+const toastError = (err: unknown) => toast(errMsg(err), undefined, { error: true });
+
+// ---------- sync with the Go API ----------
+let syncing: Promise<void> | null = null;
+const details = new Map<number, { key: string; d: ApiConversationDetail }>(); // per-chat cache
+const awaiting = new Map<string, number>(); // web chat: persona id → when the scammer last sent
+const REPLY_WAIT_MS = 120_000; // stop showing "typing…" after this
+let knownEntities: Set<string> | null = null; // for the "Entity extracted" toast
+
+// One poll of everything the screens show. Concurrent callers share the request in flight.
+export function refresh(): Promise<void> {
+  if (USE_SAMPLE) return Promise.resolve();
+  return (syncing ??= pull().finally(() => (syncing = null)));
+}
+
+async function pull() {
+  try {
+    const [personas, accounts, convos, ents] = await Promise.all([
+      api<ApiPersona[]>("/internal/personas"),
+      api<ApiAccount[]>("/internal/accounts"),
+      api<ApiConversation[]>("/internal/conversations?limit=50"),
+      api<ApiEntity[]>("/internal/entities?limit=500"),
+    ]);
+    // Messages come from GET /internal/conversations/{id}. Refetch a chat only when it changed,
+    // or while it is recent (extraction finishes a moment after the message).
+    const now = Date.now();
+    await Promise.all(
+      convos.map(async (c) => {
+        const key = `${c.last_message_at}|${c.status}|${c.stage}`;
+        const recent = !!c.last_message_at && now - Date.parse(c.last_message_at) < REPLY_WAIT_MS;
+        if (details.get(c.id)?.key === key && !recent) return;
+        details.set(c.id, { key, d: await api<ApiConversationDetail>(`/internal/conversations/${c.id}`) });
+      }),
+    );
+    const mapped = convos.map((c) => toConversation(c, details.get(c.id)?.d.messages, accounts));
+    const typing = { ...get().ui.typing };
+    for (const c of mapped) {
+      const since = c.web ? awaiting.get(c.personaId) : undefined;
+      if (since === undefined) continue;
+      const msgs = details.get(Number(c.id))?.d.messages ?? [];
+      const answered = msgs.some((m) => m.sender_type !== "scammer" && Date.parse(m.sent_at) >= since);
+      typing[c.id] = !answered && c.status === "bot" && now - since < REPLY_WAIT_MS;
+      if (!typing[c.id]) awaiting.delete(c.personaId);
+    }
+    // GET /internal/entities has no scam type or source chat: take both from the earliest chat that captured it.
+    const source = new Map<string, { convoId: string; scam: Entity["scam"] }>();
+    for (const c of [...convos].sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at))) {
+      for (const e of details.get(c.id)?.d.entities ?? []) {
+        if (!source.has(String(e.id))) source.set(String(e.id), { convoId: String(c.id), scam: c.scam_type?.valid ? c.scam_type.scam_type : "other" });
+      }
+    }
+    const entities = ents.map((e) => withOverlay(toEntity(e, source.get(String(e.id)))));
+    const fresh = knownEntities && entities.find((e) => !knownEntities!.has(e.id) && e.status === "unverified");
+    if (fresh) toast("Entity extracted · now in the Verify queue", { label: "Open", href: `/verify?selected=${fresh.id}` });
+    knownEntities = new Set(entities.map((e) => e.id));
+    const genIds = get().data.genIds;
+    set((s) => ({
+      data: { ...s.data, personas: personas.sort((a, b) => b.id - a.id).map((p) => toPersona(p, accounts, genIds)), convos: mapped, entities },
+      ui: { ...s.ui, loaded: true, loadError: null, lastSync: Date.now(), accounts, typing },
+    }));
+  } catch (err) {
+    setUI({ loadError: errMsg(err) });
+  }
+}
+
+// GET /readyz: 200 or 503 with { postgres, redis } checks. There is no /internal/status yet.
+async function pullHealth() {
+  const t0 = performance.now();
+  let health: Health;
+  try {
+    const res = await fetch("/api/readyz", { cache: "no-store" });
+    const checks = ((await res.json().catch(() => null)) ?? {}) as Record<string, string>;
+    health = { ok: res.ok, status: res.status, checks, ms: Math.round(performance.now() - t0) };
+  } catch {
+    health = { ok: false, status: 0, checks: {}, ms: Math.round(performance.now() - t0) };
+  }
+  setUI({ health });
+}
+
+let syncStarted = false;
+// Started by the Shell. Polls every 3 s while the tab is visible (spec S2: 3 s).
+export function startSync(): () => void {
+  if (USE_SAMPLE || syncStarted) return () => {};
+  syncStarted = true;
+  void refresh();
+  void pullHealth();
+  const fast = setInterval(() => !document.hidden && void refresh(), 3000);
+  const slow = setInterval(() => !document.hidden && void pullHealth(), 10_000); // spec S6: 10 s
+  return () => {
+    syncStarted = false;
+    clearInterval(fast);
+    clearInterval(slow);
+  };
+}
+
 // ---------- actions ----------
-export function generatePersona(): Promise<string> {
-  setUI({ generating: true, genError: false });
+export async function generatePersona(): Promise<string> {
+  if (!USE_SAMPLE) {
+    setUI({ generating: true, genError: null });
+    try {
+      const r = await api<ApiGenerateResult>("/internal/personas/generate", { body: { count: 1, mode: "random" } });
+      const id = r.personas[0] ? String(r.personas[0].id) : "";
+      if (!id) throw new ApiError(r.notes.join(" ") || "The generator returned no persona", 500);
+      setData((d) => ({ ...d, genIds: [...d.genIds, id] }));
+      await refresh();
+      return id;
+    } catch (err) {
+      setUI({ genError: errMsg(err), genErrorSetup: err instanceof ApiError && err.status === 503 });
+      return "";
+    } finally {
+      setUI({ generating: false });
+    }
+  }
+  setUI({ generating: true, genError: null });
   return new Promise((resolve) =>
     setTimeout(() => {
       let id = "";
@@ -162,9 +329,19 @@ export function generatePersona(): Promise<string> {
   );
 }
 
-export function setPersonaStatus(id: string, to: PersonaStatus) {
+export async function setPersonaStatus(id: string, to: PersonaStatus) {
   const p = get().data.personas.find((x) => x.id === id);
   if (!p) return;
+  if (!USE_SAMPLE) {
+    try {
+      await api(`/internal/personas/${id}/status`, { body: { status: to } });
+      await refresh();
+      toast(`${p.name} is ${to}`);
+    } catch (err) {
+      toastError(err);
+    }
+    return;
+  }
   setData((d) => ({ ...d, personas: d.personas.map((x) => (x.id === id ? { ...x, status: to } : x)) }));
   toast(`${p.name} is ${to}`);
 }
@@ -172,19 +349,44 @@ export function setPersonaStatus(id: string, to: PersonaStatus) {
 const updateConvo = (id: string, fn: (c: Conversation) => Conversation) =>
   setData((d) => ({ ...d, convos: d.convos.map((c) => (c.id === id ? fn(c) : c)) }));
 
+// mode "human" takes over (the bot stops at once), "bot" hands back.
+async function apiTakeover(id: string, mode: "human" | "bot") {
+  try {
+    await api(`/internal/conversations/${id}/takeover`, { body: { mode } });
+    if (mode === "human") setUI((u) => ({ typing: { ...u.typing, [id]: false } }));
+    await refresh();
+    if (mode === "bot") toast("Bot is replying again");
+  } catch (err) {
+    toastError(err);
+  }
+}
+
 export function takeover(id: string) {
+  if (!USE_SAMPLE) return void apiTakeover(id, "human");
   updateConvo(id, (c) => ({ ...c, status: "operator" }));
   setUI((u) => ({ typing: { ...u.typing, [id]: false } }));
 }
 
 export function handback(id: string) {
+  if (!USE_SAMPLE) return void apiTakeover(id, "bot");
   updateConvo(id, (c) => ({ ...c, status: "bot" }));
   toast("Bot is replying again");
 }
 
 export function operatorSend(id: string, text: string) {
   const t = clock();
+  // Shown at once; the next poll replaces it with the stored message.
   updateConvo(id, (c) => ({ ...c, last: t, msgs: [...c.msgs, { who: "operator", text, t }] }));
+  if (USE_SAMPLE) return;
+  api(`/internal/conversations/${id}/operator-message`, { body: { text } })
+    .then(() => {
+      details.delete(Number(id));
+      return refresh();
+    })
+    .catch((err: unknown) => {
+      updateConvo(id, (c) => ({ ...c, msgs: c.msgs.filter((m) => !(m.who === "operator" && m.text === text && m.t === t)) }));
+      toast(`Message not sent: ${errMsg(err)}`, undefined, { error: true });
+    });
 }
 
 // ---------- Verify / Reject with Undo (spec §4.5) ----------
@@ -207,11 +409,26 @@ const patchEntity = (id: string, fields: Partial<Entity>) =>
 const applyDecision = (id: string, { to, note }: Decision) =>
   patchEntity(id, { status: to, conf: to === "verified" ? "high" : "low", note });
 
-// Swap point: POST /internal/entities/{id}/verify with { decision, note }.
-// keepalive lets the request finish while the tab closes. Must throw with the API's error.message on failure.
-// Demo: the change is already in local data, so there is nothing to send yet.
+// Decisions the server hasn't confirmed yet, laid over each poll so a row doesn't jump back
+// into the queue. Infinity while waiting / sending; a short grace period after the save.
+const overlay = new Map<string, { d: Decision; until: number }>();
+const SETTLE_MS = 15_000;
+
+export function withOverlay(e: Entity): Entity {
+  const o = overlay.get(e.id);
+  if (!o) return e;
+  if ((o.until !== Infinity && e.status === o.d.to) || Date.now() > o.until) {
+    overlay.delete(e.id);
+    return e;
+  }
+  return { ...e, status: o.d.to, conf: o.d.to === "verified" ? "high" : "low", note: o.d.note };
+}
+
+// POST /internal/entities/{id}/verify with { decision, note }. keepalive lets the request finish
+// while the tab closes. Throws with the API's error message on failure.
 async function saveDecision(id: string, d: Decision, keepalive = false): Promise<void> {
-  void [id, d, keepalive];
+  if (USE_SAMPLE) return; // sample mode: the change is already in local data
+  await api(`/internal/entities/${id}/verify`, { body: { decision: d.to, note: d.note }, keepalive });
 }
 
 export function decide(id: string, to: Decision["to"], note = "") {
@@ -220,6 +437,7 @@ export function decide(id: string, to: Decision["to"], note = "") {
   if (pending.has(id)) send(id); // a second decision on the same entity: save the first one now
   const prev = { status: e.status, conf: e.conf, note: e.note };
   applyDecision(id, { to, note });
+  overlay.set(id, { d: { to, note }, until: Infinity });
   const word = to === "verified" ? "Verified" : "Rejected";
   const toastId = toast(
     `${word} ${typeLabel(e)} ${showVal(e)}${to === "verified" ? " — now high" : ""}`,
@@ -234,6 +452,7 @@ function undoDecision(id: string) {
   if (!p) return; // already sent
   clearTimeout(p.timer);
   pending.delete(id);
+  overlay.delete(id);
   patchEntity(id, p.prev);
   toast("Undone");
 }
@@ -250,22 +469,28 @@ function send(id: string, keepalive = false) {
 
 // Sends a decision. On failure the row goes back to the queue with a Retry that resends it.
 function commit(id: string, d: Decision, prev: EntityFields, keepalive = false) {
-  saveDecision(id, d, keepalive).catch((err: unknown) => {
-    patchEntity(id, prev);
-    const msg = err instanceof Error && err.message ? err.message : "Could not save the decision";
-    toast(
-      msg,
-      {
-        label: "Retry",
-        testId: "verify-retry-btn",
-        run: () => {
-          applyDecision(id, d);
-          commit(id, d, prev);
+  overlay.set(id, { d, until: Infinity });
+  saveDecision(id, d, keepalive)
+    .then(() => {
+      overlay.set(id, { d, until: Date.now() + SETTLE_MS });
+      void refresh();
+    })
+    .catch((err: unknown) => {
+      overlay.delete(id);
+      patchEntity(id, prev);
+      toast(
+        errMsg(err),
+        {
+          label: "Retry",
+          testId: "verify-retry-btn",
+          run: () => {
+            applyDecision(id, d);
+            commit(id, d, prev);
+          },
         },
-      },
-      { error: true },
-    );
-  });
+        { error: true },
+      );
+    });
 }
 
 // Send every waiting decision now: on route change and when the tab closes, so none is lost.
@@ -274,8 +499,33 @@ export function flushDecisions(keepalive = false) {
 }
 if (typeof window !== "undefined") window.addEventListener("pagehide", () => flushDecisions(true));
 
-// Scammer message from the web chat page. Returns the conversation id.
+// Web chat (dev only): the backend's chat simulator plays a Telegram account for the persona.
+const SIM_SCAMMER = "hr_parttime_job"; // shows as @sim_hr_parttime_job
+const simAccounts = new Map<string, number>(); // persona id → simulated account id
+
+async function apiScammerSends(personaId: string, text: string) {
+  try {
+    let account = simAccounts.get(personaId);
+    if (account === undefined) {
+      const r = await api<{ account_id: number }>("/internal/sim/accounts", { body: { persona_id: Number(personaId) } });
+      account = r.account_id;
+      simAccounts.set(personaId, account);
+    }
+    await api("/internal/sim/messages", { body: { account_id: account, from: SIM_SCAMMER, text } });
+    awaiting.set(personaId, Date.now());
+    await refresh();
+    setTimeout(() => void refresh(), 1000); // the message is stored by a workflow, a moment later
+  } catch (err) {
+    toastError(err);
+  }
+}
+
+// Scammer message from the web chat page. Returns the conversation id (sample mode only).
 export function scammerSends(personaId: string, text: string): string | null {
+  if (!USE_SAMPLE) {
+    void apiScammerSends(personaId, text);
+    return null;
+  }
   const d = get().data;
   const p = d.personas.find((x) => x.id === personaId);
   if (!p) return null;
@@ -328,9 +578,28 @@ export function fillBank(bank: string, acct: string) {
   setData((d) => ({ ...d, bank: { ...d.bank, bank, acct: groupAcct(acct) }, lastLookup: null }));
 }
 
-export const clearLookup = () => setData((d) => ({ ...d, lastLookup: null }));
+export const clearLookup = () => {
+  setData((d) => ({ ...d, lastLookup: null }));
+  setUI({ lookupError: null });
+};
+
+// Through the Next server route, so the lookup token never reaches the browser. Two results (D1).
+async function apiLookup() {
+  setUI({ checking: true, lookupError: null });
+  try {
+    const { bank, acct } = get().data.bank;
+    const r = await api<ApiLookupResult>("/demo/lookup", { body: { bank, account: acct } });
+    setData((x) => ({ ...x, lastLookup: { result: r.res.match ? "held" : "sent", entityId: null, res: r.res, bank: x.bank.bank, amt: x.bank.amt, ms: r.ms } }));
+  } catch (err) {
+    setData((x) => ({ ...x, lastLookup: null }));
+    setUI({ lookupError: errMsg(err) });
+  } finally {
+    setUI({ checking: false });
+  }
+}
 
 export function runLookup() {
+  if (!USE_SAMPLE) return void apiLookup();
   setUI({ checking: true });
   setTimeout(() => {
     const d = get().data;
@@ -352,8 +621,18 @@ export function toggleTelegram() {
 }
 
 export function resetDemo() {
+  if (!USE_SAMPLE) {
+    // Server data stays. Send waiting decisions (never lose one), then clear this browser's demo state.
+    flushDecisions();
+    const s = seed();
+    setData((d) => ({ ...d, usedScript: s.usedScript, lastLookup: null, bank: s.bank, genIds: [] }));
+    setUI({ lookupError: null, genError: null });
+    toast("Demo state in this browser reset. Server data is unchanged");
+    return;
+  }
   for (const p of pending.values()) clearTimeout(p.timer);
   pending.clear();
+  overlay.clear();
   set(() => ({ data: seed(), ui: freshUI(Date.now()) }), true);
   toast("Demo data reset");
 }

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
 import { DEV_CHAT, useAgo } from "@/lib/hooks";
-import { demoSteps, dismissToast, flushDecisions, liveConvos, queueOf, resetDemo, useStore } from "@/lib/store";
+import { Loading } from "@/components/ui";
+import { demoSteps, dismissToast, flushDecisions, liveConvos, queueOf, refresh, resetDemo, startSync, useStore } from "@/lib/store";
 
 const OPERATE = [
   { href: "/personas", label: "Personas", id: "personas" },
@@ -26,7 +27,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="work">
           {DEV_CHAT && <DemoPath />}
           <main id="main" tabIndex={-1}>
-            {children}
+            <Gate>{children}</Gate>
           </main>
         </div>
       </div>
@@ -34,6 +35,40 @@ export function Shell({ children }: { children: ReactNode }) {
       <Suspense fallback={null}>
         <FlushOnNavigate />
       </Suspense>
+    </>
+  );
+}
+
+// API mode: poll the Go API, and show loading / error until the first answer arrives.
+function Gate({ children }: { children: ReactNode }) {
+  const { loaded, loadError } = useStore().ui;
+  useEffect(startSync, []);
+  if (!loaded && !loadError) return <Loading />;
+  if (!loaded)
+    return (
+      <div className="banner err" role="alert" data-testid="api-error">
+        <div className="txt">
+          <h3>Can&apos;t load data from Sockabus</h3>
+          <p>{loadError}</p>
+        </div>
+        <div className="acts">
+          <button className="btn btn-primary" onClick={() => void refresh()}>
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  return (
+    <>
+      {loadError && (
+        <div className="banner err" role="alert" data-testid="api-error">
+          <div className="txt">
+            <h3>Connection lost — showing the last data received</h3>
+            <p>{loadError} Retrying every 3 s.</p>
+          </div>
+        </div>
+      )}
+      {children}
     </>
   );
 }

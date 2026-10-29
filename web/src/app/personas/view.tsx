@@ -39,14 +39,25 @@ export function PersonasView() {
     banner = (
       <div className="banner err" data-testid="persona-generate-error">
         <div className="txt">
-          <h3>Couldn&apos;t generate a persona</h3>
-          <p>The AI model didn&apos;t answer in time. Nothing was saved. Try again — it usually works on the second click.</p>
+          <h3>{ui.genErrorSetup ? "Persona generation isn't set up on the server" : "Couldn't generate a persona"}</h3>
+          <p>
+            {ui.genErrorSetup
+              ? "The backend has no AI model key, so it can't write new personas. Nothing was saved. The existing personas still work for the demo."
+              : `${ui.genError.replace(/\.?$/, ".")} Nothing was saved. Try again — it usually works on the second click.`}
+          </p>
+          {ui.genErrorSetup && (
+            <p className="muted mono" style={{ fontSize: 14 }}>
+              {ui.genError}
+            </p>
+          )}
         </div>
-        <div className="acts">
-          <button className="btn btn-primary" onClick={generate}>
-            Try again
-          </button>
-        </div>
+        {!ui.genErrorSetup && (
+          <div className="acts">
+            <button className="btn btn-primary" onClick={generate}>
+              Try again
+            </button>
+          </div>
+        )}
       </div>
     );
   } else if (np?.status === "draft") {

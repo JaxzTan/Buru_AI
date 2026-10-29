@@ -1,7 +1,7 @@
 "use client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useStore } from "./store";
+import { USE_SAMPLE, useStore } from "./store";
 
 // Web chat, demo path bar, reset and "simulate" controls. On unless set to "false" (spec D2).
 export const DEV_CHAT = process.env.NEXT_PUBLIC_DEV_CHAT !== "false";
@@ -36,9 +36,10 @@ export function useAgo() {
     return () => clearInterval(t);
   }, []);
   if (!now || !lastSync) return "just now";
-  // Pretend a 3 s poll: never older than 10 s while the page is open.
-  const s = Math.max(1, Math.round((now - lastSync) / 1000) % 10);
-  return `${s} s ago`;
+  const secs = Math.max(1, Math.round((now - lastSync) / 1000));
+  // Sample mode pretends a 3 s poll: never older than 10 s while the page is open.
+  if (USE_SAMPLE) return `${secs % 10 || 1} s ago`;
+  return secs < 120 ? `${secs} s ago` : `${Math.round(secs / 60)} min ago`;
 }
 
 // Keep a chat scrolled to the newest message.
