@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: buru
       POSTGRES_USER: buru
-      POSTGRES_PASSWORD: buru
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-buru} # set in .env on the server (openssl rand -hex 24)
     ports: ["5432:5432"]
     volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
@@ -39,7 +39,7 @@ services:
     build: .
     env_file: .env
     environment:
-      SOCKABUS_POSTGRES_URL: postgres://buru:buru@postgres:5432/buru?sslmode=disable
+      SOCKABUS_POSTGRES_URL: postgres://buru:${POSTGRES_PASSWORD:-buru}@postgres:5432/buru?sslmode=disable
       SOCKABUS_REDIS_ADDR: redis:6379
       SOCKABUS_TEMPORAL_HOSTPORT: temporal:7233
     ports: ["8080:8080"]
@@ -59,6 +59,15 @@ services:
       SOCKABUS_OPERATOR_TOKEN: ${SOCKABUS_OPERATOR_TOKEN:-} # added by the /api proxy, never sent to the browser
     ports: ["3000:3000"]
     depends_on: [app]
+
+  # One-off: docker compose run --rm migrate (make deploy runs it before restarting the app).
+  migrate:
+    profiles: [tools]
+    image: migrate/migrate:v4.19.1
+    volumes: [./db/migrations:/migrations:ro]
+    command: ["-path", "/migrations", "-database", "postgres://buru:${POSTGRES_PASSWORD:-buru}@postgres:5432/buru?sslmode=disable", "up"]
+    depends_on:
+      postgres: { condition: service_healthy }
 
 volumes:
   postgres-data:
