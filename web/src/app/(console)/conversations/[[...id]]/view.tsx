@@ -49,32 +49,23 @@ export function ConversationsView() {
           {list.length ? (
             list.map((x) => {
               const p = data.personas.find((y) => y.id === x.personaId);
-              const lm = x.msgs.at(-1);
               return (
                 <Link
                   key={x.id}
                   href={`/conversations/${x.id}${qs}`}
                   replace
                   scroll={false}
-                  className="item"
+                  className="item crow"
                   aria-current={x.id === c?.id}
+                  title={`${x.scammer} → ${p?.name ?? "?"} · ${x.status}`}
                   data-testid="convo-row"
                   style={{ color: "inherit", textDecoration: "none" }}
                 >
-                  <span className="top">
-                    <span className="mono">{x.scammer}</span>
-                    <span className="muted" style={{ fontSize: 15 }}>
-                      {x.last}
-                    </span>
+                  <span className={`sdot s-${x.status}`} data-testid="convo-status">
+                    <span className="sr-only">{x.status}</span>
                   </span>
-                  <b>→ {p?.name ?? "?"}</b>
-                  <span className="prev">{lm ? lm.text : "No messages yet"}</span>
-                  <span className="row-gap">
-                    <Chip>{x.scam}</Chip>
-                    <span data-testid="convo-status">
-                      <Badge word={x.status} />
-                    </span>
-                  </span>
+                  <span className="cname">{p?.name ?? "?"}</span>
+                  <span className="t">{x.last}</span>
                 </Link>
               );
             })

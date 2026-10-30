@@ -2,12 +2,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Suspense, useEffect, type ReactNode } from "react";
-import { DEV_CHAT, useAgo } from "@/lib/hooks";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { DEV_CHAT, useAgo, useSidebar } from "@/lib/hooks";
 import { Loading } from "@/components/ui";
-import { demoSteps, dismissToast, flushDecisions, liveConvos, queueOf, refresh, resetDemo, startSync, useStore } from "@/lib/store";
+import { dismissToast, flushDecisions, liveConvos, queueOf, refresh, resetDemo, startSync, USE_SAMPLE, useStore } from "@/lib/store";
 
 const OPERATE = [
+  { href: "/", label: "Dashboard", id: "overview" },
   { href: "/personas", label: "Personas", id: "personas" },
   { href: "/conversations", label: "Conversations", id: "conversations" },
   { href: "/verify", label: "Verify queue", id: "verify" },
@@ -20,12 +21,37 @@ const DEMO = [
 ];
 
 export function Shell({ children }: { children: ReactNode }) {
+  const [open, toggle] = useSidebar();
   return (
     <>
-      <div className="app">
-        <Rail />
+      <div className={`app${open ? "" : " rail-off"}`}>
+        <Rail hidden={!open} />
         <div className="work">
-          {DEV_CHAT && <DemoPath />}
+          {USE_SAMPLE && (
+            <div className="sample-banner" role="note" data-testid="sample-banner">
+              <span className="badge t-warning">Sample</span>
+              Sample data — not live
+            </div>
+          )}
+          <div className="topbar">
+            <button
+              type="button"
+              className="rail-toggle"
+              onClick={toggle}
+              aria-expanded={open}
+              aria-controls="sidebar"
+              data-testid="sidebar-toggle-btn"
+            >
+              <span aria-hidden="true">{open ? "«" : "☰"}</span>
+              {open ? "Hide menu" : "Show menu"}
+            </button>
+            {!open && (
+              <Link href="/" className="mini-brand" aria-label="Sockabus dashboard">
+                <Image src="/logo.png" alt="" width={36} height={24} />
+                <b>Sockabus</b>
+              </Link>
+            )}
+          </div>
           <main id="main" tabIndex={-1}>
             <Gate>{children}</Gate>
           </main>
@@ -44,8 +70,8 @@ function Gate({ children }: { children: ReactNode }) {
   const { loaded, loadError } = useStore().ui;
   useEffect(startSync, []);
   if (!loaded && !loadError) return <Loading />;
-  if (!loaded)
-    return (
+  if (!loaded) {
+    const banner = (
       <div className="banner err" role="alert" data-testid="api-error">
         <div className="txt">
           <h3>Can&apos;t load data from Sockabus</h3>
@@ -58,6 +84,13 @@ function Gate({ children }: { children: ReactNode }) {
         </div>
       </div>
     );
+    // The Status page is for exactly this moment: show it (red) under the banner instead of hiding it.
+    return (
+      <Suspense fallback={banner}>
+        <UnlessStatus banner={banner}>{children}</UnlessStatus>
+      </Suspense>
+    );
+  }
   return (
     <>
       {loadError && (
@@ -73,6 +106,18 @@ function Gate({ children }: { children: ReactNode }) {
   );
 }
 
+// usePathname is runtime data, so this sits behind Suspense (see NavLinks).
+function UnlessStatus({ banner, children }: { banner: ReactNode; children: ReactNode }) {
+  return usePathname() === "/status" ? (
+    <>
+      {banner}
+      {children}
+    </>
+  ) : (
+    banner
+  );
+}
+
 // Leaving a page sends any Verify/Reject still inside its Undo window (spec §4.5).
 function FlushOnNavigate() {
   const path = usePathname();
@@ -81,6 +126,9 @@ function FlushOnNavigate() {
 }
 
 type NavItem = (typeof OPERATE)[number];
+
+// "/" is only "here" on the overview itself; every other item also covers its sub-pages.
+const isHere = (path: string | undefined, href: string) => (href === "/" ? path === "/" : !!path?.startsWith(href));
 
 // usePathname is runtime data, so the active highlight streams in behind Suspense.
 function NavLinks({ items, counts }: { items: NavItem[]; counts: Record<string, number> }) {
@@ -91,7 +139,7 @@ function Links({ items, counts, path }: { items: NavItem[]; counts: Record<strin
   return (
     <nav className="nav">
       {items.map((n) => (
-        <Link key={n.id} href={n.href} data-testid={`nav-${n.id}`} aria-current={path?.startsWith(n.href) ? "page" : undefined}>
+        <Link key={n.id} href={n.href} data-testid={`nav-${n.id}`} aria-current={isHere(path, n.href) ? "page" : undefined}>
           <span>{n.label}</span>
           {counts[n.id] ? <span className="count">{counts[n.id]}</span> : null}
         </Link>
@@ -108,20 +156,30 @@ function Nav({ items, counts }: { items: NavItem[]; counts: Record<string, numbe
   );
 }
 
-function Rail() {
-  const { data } = useStore();
+function Rail({ hidden }: { hidden: boolean }) {
+  const { data, ui } = useStore();
   const ago = useAgo();
   const counts: Record<string, number> = { conversations: liveConvos(data).length, verify: queueOf(data).length };
-  const ok = data.telegram;
+  // Sample mode: the simulated Telegram switch. API mode: GET /readyz and the last poll, never a guess.
+  const { health: h, loadError } = ui;
+  const ok = USE_SAMPLE ? data.telegram : !!h?.ok && !loadError;
+  const title = USE_SAMPLE ? (ok ? "All systems normal" : "Telegram disconnected") : !h ? "Checking backend…" : ok ? "Backend up" : h.status ? "Backend not ready" : "Backend not reachable";
+  const sub = USE_SAMPLE
+    ? ok
+      ? `Telegram connected · last message ${ago}`
+      : "Alert sent to team · use Web chat"
+    : ok
+      ? `Data updated ${ago}`
+      : "Open Status for details";
   return (
-    <aside className="rail" aria-label="Sockabus navigation">
-      <div className="brand">
+    <aside className="rail" id="sidebar" aria-label="Sockabus navigation" hidden={hidden}>
+      <Link href="/" className="brand" aria-label="Sockabus dashboard">
         <Image src="/logo.png" alt="Sockabus mascot" width={52} height={34} priority />
         <div>
           <b>Sockabus</b>
           <i />
         </div>
-      </div>
+      </Link>
       <div className="group caps">Operate</div>
       <Nav items={OPERATE} counts={counts} />
       <div className="group caps">Demo</div>
@@ -129,12 +187,12 @@ function Rail() {
       <div className="spacer" />
       <div className="sys" data-testid="sidebar-status">
         <div className="row">
-          <span className="dot" style={{ color: ok ? "var(--green)" : "var(--red)" }} />
-          {ok ? "All systems normal" : "Telegram disconnected"}
+          <span className="dot" style={{ color: ok ? "var(--green)" : !USE_SAMPLE && !h ? "var(--faint)" : "var(--red)" }} />
+          {title}
         </div>
-        <small>{ok ? `Telegram connected · last message ${ago}` : "Alert sent to team · use Web chat"}</small>
+        <small>{sub}</small>
       </div>
-      <div className="who">Signed in as operator</div>
+      <SignedIn />
       {DEV_CHAT && (
         <div>
           <button className="reset" type="button" onClick={resetDemo} data-testid="reset-demo">
@@ -146,34 +204,41 @@ function Rail() {
   );
 }
 
-function DemoPath() {
-  const { data } = useStore();
-  const steps = demoSteps(data);
-  const i = steps.findIndex((s) => !s.done);
+// Who is signed in (GET /api/auth/me reads the httpOnly cookie on the server) and Sign out.
+function SignedIn() {
+  const [me, setMe] = useState<{ user: string | null; gate: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => live && j && setMe(j))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  const signOut = async () => {
+    setBusy(true);
+    flushDecisions(true); // a decision still in its Undo window is sent, never lost
+    await fetch("/api/auth/sign-out", { method: "POST" }).catch(() => {});
+    // Full page load on purpose: drops all in-memory data and lets the proxy check the cookie again.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    location.assign("/sign-in");
+  };
+  if (!me) return <div className="who">&nbsp;</div>;
+  if (!me.gate) return <div className="who">Sign-in is off (development)</div>;
   return (
-    <div className="path" aria-label="Demo path">
-      <span className="caps muted">Demo path</span>
-      <ol>
-        {steps.map((s, k) => (
-          <li key={s.label} className={s.done ? "done" : k === i ? "now" : ""}>
-            <b>{s.done ? "✓" : k + 1}</b>
-            {s.label}
-          </li>
-        ))}
-      </ol>
-      <div className="next">
-        {i === -1 ? (
-          <span className="badge t-success">Demo path complete</span>
-        ) : (
-          <>
-            <span className="muted">Next:</span>{" "}
-            <Link className="btn btn-primary btn-sm" href={steps[i].href} data-testid="demo-next">
-              {steps[i].label} →
-            </Link>
-          </>
-        )}
+    <>
+      <div className="who" data-testid="signed-in-user">
+        Signed in as <b>{me.user}</b>
       </div>
-    </div>
+      <div>
+        <button className="reset" type="button" onClick={signOut} disabled={busy} data-testid="signout-btn">
+          Sign out
+        </button>
+      </div>
+    </>
   );
 }
 

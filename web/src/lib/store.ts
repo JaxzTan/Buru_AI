@@ -25,7 +25,7 @@ import {
   type ApiLookupResult,
   type ApiPersona,
 } from "./api";
-import { clock, groupAcct, showVal, today, typeLabel } from "./format";
+import { clock, digits, groupAcct, showVal, today, typeLabel } from "./format";
 import { GENERATED, SEED_CONVOS, SEED_ENTITIES, SEED_PERSONAS } from "./seed";
 import { classify, extract, lookup, personaReply } from "./sim";
 import type { BankDraft, Conversation, Entity, Lookup, PersonaStatus } from "./types";
@@ -34,7 +34,7 @@ export const USE_SAMPLE = process.env.NEXT_PUBLIC_USE_SAMPLE_DATA === "true";
 
 // Sample mode saves all data; API mode saves only per-browser conveniences (bank form, script ticks...).
 const KEY = USE_SAMPLE ? "sockabus-console-v1" : "sockabus-console-api-v1";
-const LOCAL_KEYS = ["usedScript", "lastLookup", "bank", "genIds"] as const;
+const LOCAL_KEYS = ["usedScript", "lastLookup", "bank", "genIds", "verifiedAt"] as const;
 
 export interface Data {
   personas: typeof SEED_PERSONAS;
@@ -45,7 +45,8 @@ export interface Data {
   usedScript: number[];
   lastLookup: Lookup | null;
   bank: BankDraft;
-  genIds: string[]; // personas made with "Generate persona" in this browser (drives the demo path)
+  genIds: string[]; // personas made with "Generate persona" in this browser
+  verifiedAt: Record<string, number>; // entity id → when this browser's Verify was saved (the API has no verified time)
 }
 
 export interface Toast {
@@ -80,6 +81,14 @@ interface UI {
   loadError: string | null; // last API load failed with this message
   accounts: ApiAccount[]; // honeypot accounts (API mode; Status screen)
   health: Health | null;
+  justVerified: string | null; // bank account just verified here: drives "Test in bank simulator →"
+  saving: Record<string, boolean>; // entity ids whose decision is being sent to the server
+  session: SessionStats; // bank simulator, "this demo session" (sessionStorage)
+}
+
+export interface SessionStats {
+  lookups: number;
+  holds: number;
 }
 
 export interface State {
@@ -97,6 +106,7 @@ const seed = (): Data => ({
   lastLookup: null,
   bank: { bank: "MBB", acct: "", amt: "150.00" },
   genIds: [],
+  verifiedAt: {},
 });
 
 const empty = (): Data => ({ ...seed(), personas: [], convos: [], entities: [] });
@@ -115,6 +125,9 @@ const freshUI = (lastSync: number): UI => ({
   loadError: null,
   accounts: [],
   health: null,
+  justVerified: null,
+  saving: {},
+  session: { lookups: 0, holds: 0 },
 });
 
 const SERVER: State = { data: initial(), ui: freshUI(0) };
@@ -131,7 +144,30 @@ function load(): State {
   } catch {
     // private window or blocked storage: start fresh
   }
-  return { data, ui: freshUI(USE_SAMPLE ? Date.now() : 0) };
+  return { data, ui: { ...freshUI(USE_SAMPLE ? Date.now() : 0), session: readSession() } };
+}
+
+// Lookups and holds in this browser tab ("this demo session"): sessionStorage, so a new tab starts at 0.
+const SESSION_KEY = "sockabus-bank-session";
+function readSession(): SessionStats {
+  try {
+    const j = JSON.parse(window.sessionStorage.getItem(SESSION_KEY) ?? "null") as SessionStats | null;
+    if (j && Number.isFinite(j.lookups) && Number.isFinite(j.holds)) return j;
+  } catch {
+    // blocked storage: count in memory only
+  }
+  return { lookups: 0, holds: 0 };
+}
+function countLookup(held: boolean) {
+  setUI((u) => {
+    const session = { lookups: u.session.lookups + 1, holds: u.session.holds + (held ? 1 : 0) };
+    try {
+      window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    } catch {
+      // keep it in memory
+    }
+    return { session };
+  });
 }
 
 const get = () => (state ??= load());
@@ -173,20 +209,6 @@ export const queueOf = (d: Data) =>
     .map(({ e }) => e);
 export const liveConvos = (d: Data) => d.convos.filter((c) => c.status !== "closed");
 export const activePersonas = (d: Data) => d.personas.filter((p) => p.status === "active");
-
-export function demoSteps(d: Data) {
-  const mei = d.personas.find((p) => p.gen);
-  const c = mei && d.convos.find((x) => x.personaId === mei.id && x.web);
-  const e = c && d.entities.find((x) => x.convoId === c.id && x.type === "bank_account");
-  return [
-    { label: "Generate persona", done: !!mei, href: "/personas" },
-    { label: "Activate", done: mei?.status === "active", href: "/personas" },
-    { label: "Scammer chats", done: !!c && c.msgs.length > 1, href: "/demo/chat" },
-    { label: "Account captured", done: !!e, href: "/demo/chat" },
-    { label: "Human verifies", done: e?.status === "verified", href: "/verify" },
-    { label: "Bank holds transfer", done: d.lastLookup?.result === "held", href: "/demo/bank" },
-  ];
-}
 
 // ---------- toasts ----------
 let toastId = 0;
@@ -271,7 +293,11 @@ async function pullHealth() {
   try {
     const res = await fetch("/api/readyz", { cache: "no-store" });
     const checks = ((await res.json().catch(() => null)) ?? {}) as Record<string, string>;
-    health = { ok: res.ok, status: res.status, checks, ms: Math.round(performance.now() - t0) };
+    // 502/504 with { error } come from our /api proxy when the Go API can't be reached: no check ran.
+    const unreachable = !res.ok && (res.status === 502 || res.status === 504) && typeof checks.error === "string";
+    health = unreachable
+      ? { ok: false, status: 0, checks: {}, ms: Math.round(performance.now() - t0) }
+      : { ok: res.ok, status: res.status, checks, ms: Math.round(performance.now() - t0) };
   } catch {
     health = { ok: false, status: 0, checks: {}, ms: Math.round(performance.now() - t0) };
   }
@@ -376,7 +402,7 @@ export function handback(id: string) {
 export function operatorSend(id: string, text: string) {
   const t = clock();
   // Shown at once; the next poll replaces it with the stored message.
-  updateConvo(id, (c) => ({ ...c, last: t, msgs: [...c.msgs, { who: "operator", text, t }] }));
+  updateConvo(id, (c) => ({ ...c, last: t, msgs: [...c.msgs, { who: "operator", text, t, at: Date.now() }] }));
   if (USE_SAMPLE) return;
   api(`/internal/conversations/${id}/operator-message`, { body: { text } })
     .then(() => {
@@ -438,6 +464,7 @@ export function decide(id: string, to: Decision["to"], note = "") {
   const prev = { status: e.status, conf: e.conf, note: e.note };
   applyDecision(id, { to, note });
   overlay.set(id, { d: { to, note }, until: Infinity });
+  if (e.type === "bank_account") setUI((u) => ({ justVerified: to === "verified" ? id : u.justVerified === id ? null : u.justVerified }));
   const word = to === "verified" ? "Verified" : "Rejected";
   const toastId = toast(
     `${word} ${typeLabel(e)} ${showVal(e)}${to === "verified" ? " — now high" : ""}`,
@@ -454,6 +481,7 @@ function undoDecision(id: string) {
   pending.delete(id);
   overlay.delete(id);
   patchEntity(id, p.prev);
+  setUI((u) => ({ justVerified: u.justVerified === id ? null : u.justVerified }));
   toast("Undone");
 }
 
@@ -468,15 +496,21 @@ function send(id: string, keepalive = false) {
 }
 
 // Sends a decision. On failure the row goes back to the queue with a Retry that resends it.
+const setSaving = (id: string, on: boolean) => setUI((u) => ({ saving: { ...u.saving, [id]: on } }));
+
 function commit(id: string, d: Decision, prev: EntityFields, keepalive = false) {
   overlay.set(id, { d, until: Infinity });
+  setSaving(id, true);
   saveDecision(id, d, keepalive)
     .then(() => {
       overlay.set(id, { d, until: Date.now() + SETTLE_MS });
+      setSaving(id, false);
+      if (d.to === "verified") setData((x) => ({ ...x, verifiedAt: { ...x.verifiedAt, [id]: Date.now() } }));
       void refresh();
     })
     .catch((err: unknown) => {
       overlay.delete(id);
+      setSaving(id, false);
       patchEntity(id, prev);
       toast(
         errMsg(err),
@@ -492,6 +526,10 @@ function commit(id: string, d: Decision, prev: EntityFields, keepalive = false) 
       );
     });
 }
+
+// Send one entity's waiting decision now (bank simulator: test it without waiting for the Undo window).
+export const sendDecisionNow = (id: string) => send(id);
+export const isDecisionWaiting = (id: string) => pending.has(id);
 
 // Send every waiting decision now: on route change and when the tab closes, so none is lost.
 export function flushDecisions(keepalive = false) {
@@ -537,7 +575,7 @@ export function scammerSends(personaId: string, text: string): string | null {
   c ??= { id: `c_${1040 + d.convos.length}`, scammer: "@hr_parttime_job", personaId: p.id, scam: "other", status: "bot", stage: 0, last: t, msgs: [], web: true };
   const scam = c.scam === "other" && kind ? kind : c.scam;
   const stage = /deposit|pay|transfer|fee|bank in/i.test(text) ? Math.max(c.stage, 2) : c.stage;
-  const convo: Conversation = { ...c, scam, stage, last: t, msgs: [...c.msgs, { who: "scammer", text, t }] };
+  const convo: Conversation = { ...c, scam, stage, last: t, msgs: [...c.msgs, { who: "scammer", text, t, at: Date.now() }] };
 
   const entities = [...d.entities];
   let newId: string | null = null;
@@ -547,7 +585,7 @@ export function scammerSends(personaId: string, text: string): string | null {
       entities[i] = { ...entities[i], sightings: entities[i].sightings + 1, convoId: entities[i].convoId ?? convo.id };
     } else {
       newId = `e_${Math.random().toString(36).slice(2, 7)}`;
-      entities.push({ id: newId, ...f, scam: scam === "other" ? (kind ?? "other") : scam, status: "unverified", conf: "medium", sightings: 1, first: `${today()}, ${t}`, convoId: convo.id, stageAt: Math.max(stage, 2), sample: false });
+      entities.push({ id: newId, ...f, scam: scam === "other" ? (kind ?? "other") : scam, status: "unverified", conf: "medium", sightings: 1, first: `${today()}, ${t}`, firstAt: Date.now(), convoId: convo.id, stageAt: Math.max(stage, 2), sample: false });
     }
   }
   setData((x) => ({ ...x, entities, convos: isNew ? [convo, ...x.convos] : x.convos.map((y) => (y.id === convo.id ? convo : y)) }));
@@ -563,7 +601,7 @@ export function scammerSends(personaId: string, text: string): string | null {
       if (!cur || cur.status !== "bot") return;
       const [reply, next] = personaReply(cur, text, hasAcct);
       const rt = clock();
-      updateConvo(cur.id, (x) => ({ ...x, stage: next, last: rt, msgs: [...x.msgs, { who: "persona", text: reply, t: rt }] }));
+      updateConvo(cur.id, (x) => ({ ...x, stage: next, last: rt, msgs: [...x.msgs, { who: "persona", text: reply, t: rt, at: Date.now() }] }));
     }, 1600 + Math.random() * 1200);
   }
   return convo.id;
@@ -589,7 +627,8 @@ async function apiLookup() {
   try {
     const { bank, acct } = get().data.bank;
     const r = await api<ApiLookupResult>("/demo/lookup", { body: { bank, account: acct } });
-    setData((x) => ({ ...x, lastLookup: { result: r.res.match ? "held" : "sent", entityId: null, res: r.res, bank: x.bank.bank, amt: x.bank.amt, ms: r.ms } }));
+    setData((x) => ({ ...x, lastLookup: { result: r.res.match ? "held" : "sent", entityId: null, res: r.res, bank: x.bank.bank, acct: digits(acct), amt: x.bank.amt, ms: r.ms } }));
+    countLookup(r.res.match);
   } catch (err) {
     setData((x) => ({ ...x, lastLookup: null }));
     setUI({ lookupError: errMsg(err) });
@@ -604,7 +643,8 @@ export function runLookup() {
   setTimeout(() => {
     const d = get().data;
     const r = lookup(d.entities, d.bank.bank, d.bank.acct);
-    setData((x) => ({ ...x, lastLookup: { ...r, bank: x.bank.bank, amt: x.bank.amt } }));
+    setData((x) => ({ ...x, lastLookup: { ...r, bank: x.bank.bank, acct: digits(x.bank.acct), amt: x.bank.amt } }));
+    countLookup(r.result === "held");
     setUI({ checking: false });
   }, 650);
 }
@@ -625,7 +665,7 @@ export function resetDemo() {
     // Server data stays. Send waiting decisions (never lose one), then clear this browser's demo state.
     flushDecisions();
     const s = seed();
-    setData((d) => ({ ...d, usedScript: s.usedScript, lastLookup: null, bank: s.bank, genIds: [] }));
+    setData((d) => ({ ...d, usedScript: s.usedScript, lastLookup: null, bank: s.bank, genIds: [], verifiedAt: {} }));
     setUI({ lookupError: null, genError: null });
     toast("Demo state in this browser reset. Server data is unchanged");
     return;
@@ -633,7 +673,9 @@ export function resetDemo() {
   for (const p of pending.values()) clearTimeout(p.timer);
   pending.clear();
   overlay.clear();
-  set(() => ({ data: seed(), ui: freshUI(Date.now()) }), true);
+  set((s) => ({ data: seed(), ui: { ...freshUI(Date.now()), session: s.ui.session } }), true);
   toast("Demo data reset");
 }
 
+
+export const clearJustVerified = () => setUI({ justVerified: null });

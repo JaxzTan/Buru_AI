@@ -1,7 +1,11 @@
 import type { Entity } from "./types";
 
 export const STAGES = ["Rapport", "Bait", "Payment request", "Stall"];
-export const BANKS: Record<string, string> = { MBB: "Maybank", CIMB: "CIMB", PBB: "Public Bank", RHB: "RHB" };
+// Every bank code the backend extractor saves (internal/extraction), as text only: no logos (spec §4.3).
+export const BANKS: Record<string, string> = {
+  MBB: "Maybank", CIMB: "CIMB", PBB: "Public Bank", RHB: "RHB", HLB: "Hong Leong",
+  BIMB: "Bank Islam", AMB: "AmBank", BSN: "BSN", UOB: "UOB", OCBC: "OCBC",
+};
 
 export const digits = (s: string | undefined) => (s ?? "").replace(/\D/g, "");
 export const groupAcct = (d: string) => d.replace(/^(\d{4})(\d{4})(\d+)$/, "$1 $2 $3");

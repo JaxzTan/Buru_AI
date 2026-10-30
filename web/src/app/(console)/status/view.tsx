@@ -109,6 +109,8 @@ function LiveStatus({ st, ago }: { st: State; ago: string }) {
   const healthy = !!h?.ok && !ui.loadError;
   const checks = h ? Object.entries(h.checks) : [];
   const failing = checks.filter(([, v]) => v !== "ok").map(([k]) => k);
+  // Backend down before the first load: no data, so say so instead of showing zeros.
+  const none = !ui.loaded;
   return (
     <>
       <Head title="Status" sub="Proof the honeypot listens 24/7, and that we know within 2 minutes if it stops." />
@@ -125,22 +127,29 @@ function LiveStatus({ st, ago }: { st: State; ago: string }) {
         <Tile
           id="status-telegram"
           label="Telegram honeypot"
-          big={tg.length ? `${tgActive} of ${tg.length} active` : "No accounts"}
-          sub={tg.length ? "Account status from the database · live connection state not reported" : "Bind one with make tglogin. Web chat still works."}
-          word={tgActive ? "up" : "none"}
-          tone={tgActive ? "success" : "warning"}
-          bad={!tgActive}
+          big={none ? "Unknown" : tg.length ? `${tgActive} of ${tg.length} active` : "No accounts"}
+          sub={none ? "No data from the backend yet" : tg.length ? "Account status from the database · live connection state not reported" : "Bind one with make tglogin. Web chat still works."}
+          word={none ? "n/a" : tgActive ? "up" : "none"}
+          tone={none ? "neutral" : tgActive ? "success" : "warning"}
+          bad={!none && !tgActive}
         />
         <Tile
           id="status-last-message"
           label="Last message received"
-          big={lastAt ?? "None yet"}
-          sub="From the most recent scammer chat"
-          word={lastAt ? "live" : "idle"}
-          tone={lastAt ? "success" : "neutral"}
+          big={none ? "Unknown" : (lastAt ?? "None yet")}
+          sub={none ? "No data from the backend yet" : "From the most recent scammer chat"}
+          word={none ? "n/a" : lastAt ? "live" : "idle"}
+          tone={!none && lastAt ? "success" : "neutral"}
         />
         <Tile id="status-llm-errors" label="AI model" big="Not reported" sub="Needs an error count from the backend (/internal/status)" word="n/a" tone="neutral" />
-        <Tile id="status-workflows" label="Conversations running" big={String(liveConvos(data).length)} sub={`${activePersonas(data).length} personas active`} word="running" tone="info" />
+        <Tile
+          id="status-workflows"
+          label="Conversations running"
+          big={none ? "Unknown" : String(liveConvos(data).length)}
+          sub={none ? "No data from the backend yet" : `${activePersonas(data).length} personas active`}
+          word={none ? "n/a" : "running"}
+          tone={none ? "neutral" : "info"}
+        />
         <Tile id="status-api" label="Lookup API" big="Not reported" sub="Try it on the Bank simulator, which shows the real time taken" word="n/a" tone="neutral" />
         <Tile
           id="status-health"

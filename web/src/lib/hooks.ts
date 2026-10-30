@@ -1,6 +1,6 @@
 "use client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { USE_SAMPLE, useStore } from "./store";
 
 // Web chat, demo path bar, reset and "simulate" controls. On unless set to "false" (spec D2).
@@ -50,4 +50,43 @@ export function useStickToBottom(dep: unknown) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [dep]);
   return ref;
+}
+
+// Sidebar shown or hidden, saved per browser. Storage can be blocked (private window), so every
+// read and write is wrapped; the server render always shows the sidebar.
+const SIDEBAR_KEY = "sockabus-sidebar";
+const sidebarListeners = new Set<() => void>();
+let sidebarMem: boolean | null = null; // used when storage is blocked
+
+function readSidebar(): boolean {
+  if (sidebarMem !== null) return sidebarMem;
+  try {
+    return window.localStorage.getItem(SIDEBAR_KEY) !== "hidden";
+  } catch {
+    return true;
+  }
+}
+
+function subscribeSidebar(l: () => void) {
+  sidebarListeners.add(l);
+  window.addEventListener("storage", l); // another tab changed it
+  return () => {
+    sidebarListeners.delete(l);
+    window.removeEventListener("storage", l);
+  };
+}
+
+export function useSidebar(): [open: boolean, toggle: () => void] {
+  const open = useSyncExternalStore(subscribeSidebar, readSidebar, () => true);
+  const toggle = useCallback(() => {
+    const next = !readSidebar();
+    try {
+      window.localStorage.setItem(SIDEBAR_KEY, next ? "shown" : "hidden");
+      sidebarMem = null;
+    } catch {
+      sidebarMem = next;
+    }
+    sidebarListeners.forEach((l) => l());
+  }, []);
+  return [open, toggle];
 }

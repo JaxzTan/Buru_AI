@@ -1,10 +1,22 @@
 "use client";
-import { useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ScamBars } from "@/components/charts";
 import { Badge, Head, Spin } from "@/components/ui";
 import { stamp } from "@/lib/api";
-import { BANKS, digits, plural } from "@/lib/format";
-import { cancelTransfer, clearLookup, fillBank, runLookup, setBankDraft, USE_SAMPLE, useStore } from "@/lib/store";
-import type { Confidence } from "@/lib/types";
+import { BANKS, digits, plural, STAGES } from "@/lib/format";
+import {
+  cancelTransfer,
+  clearLookup,
+  fillBank,
+  isDecisionWaiting,
+  runLookup,
+  sendDecisionNow,
+  setBankDraft,
+  USE_SAMPLE,
+  useStore,
+} from "@/lib/store";
+import type { Confidence, Entity } from "@/lib/types";
 
 export function BankView() {
   const { data, ui } = useStore();
@@ -16,6 +28,24 @@ export function BankView() {
   // Newest captured account: sample data appends, the API lists newest first.
   const accts = data.entities.filter((x) => x.type === "bank_account" && !x.sample);
   const captured = USE_SAMPLE ? accts.at(-1) : accts[0];
+
+  // ?entity=<id> from "Test in bank simulator →": fill bank + account from that entity (the number never
+  // goes in the URL). A decision still inside its Undo window is sent now, and Transfer waits for the save.
+  const entityId = useSearchParams().get("entity");
+  const target = entityId ? data.entities.find((x) => x.id === entityId && x.type === "bank_account") : undefined;
+  const filled = useRef<string | null>(null);
+  useEffect(() => {
+    if (!target || filled.current === target.id) return;
+    filled.current = target.id;
+    fillBank(target.bank, target.value);
+    if (isDecisionWaiting(target.id)) sendDecisionNow(target.id);
+  }, [target]);
+  const saving = !!entityId && (!!ui.saving[entityId] || isDecisionWaiting(entityId));
+  // The account the last lookup matched, for the "why" summary (same digits; same bank when both are known).
+  const hit =
+    L?.result === "held" && L.acct
+      ? data.entities.filter((x) => x.type === "bank_account" && digits(x.value) === L.acct).sort((a, b) => Number(b.bank === L.bank) - Number(a.bank === L.bank))[0]
+      : undefined;
 
   const edit = () => {
     clearLookup();
@@ -220,7 +250,12 @@ export function BankView() {
                 data-testid="amount-input"
               />
             </div>
-            <button className="btn btn-primary" disabled={ui.checking} data-testid="transfer-btn">
+            {saving && (
+              <p className="muted" role="status" style={{ margin: 0, fontSize: 15 }} data-testid="bank-saving">
+                <Spin /> Saving your verification first. Transfer unlocks when it&apos;s saved.
+              </p>
+            )}
+            <button className="btn btn-primary" disabled={ui.checking || saving} data-testid="transfer-btn">
               Transfer RM {d.amt || "0.00"}
             </button>
             <p className="muted" style={{ margin: 0, fontSize: 15, color: err ? "var(--red)" : undefined }} role={err ? "alert" : undefined}>
@@ -228,7 +263,9 @@ export function BankView() {
             </p>
           </form>
           {result}
+          {hit && !ui.checking && <WhyFlagged e={hit} />}
         </section>
+        <div className="bank-side">
         <aside className="bts" aria-label="Behind the scenes">
           <span className="caps">Behind the scenes</span>
           <h2>{L ? "What just happened, in 3 steps" : "What happens when you press Transfer"}</h2>
@@ -246,6 +283,8 @@ export function BankView() {
           <pre aria-label="Lookup response">{L ? <Json value={L.res} /> : "// press Transfer to see the response"}</pre>
           <p className="fine">The lookup token stays on our server. The browser never calls /v1/lookup directly.</p>
         </aside>
+        <ClientPanel />
+        </div>
       </div>
     </>
   );
@@ -274,5 +313,91 @@ function Json({ value }: { value: unknown }) {
         ),
       )}
     </>
+  );
+}
+
+// Built only from real data with fixed sentence templates; no generated text. A sentence whose data is
+// missing is left out.
+function WhyFlagged({ e }: { e: Entity }) {
+  const { data } = useStore();
+  const c = e.convoId ? data.convos.find((x) => x.id === e.convoId) : undefined;
+  const p = c && data.personas.find((x) => x.id === c.personaId);
+  const dv = digits(e.value);
+  const src = c?.msgs.find((m) => m.who === "scammer" && dv.length >= 6 && digits(m.text).includes(dv));
+  const verifiedAt = data.verifiedAt[e.id];
+  const lines: string[] = [];
+  if (c) lines.push(p ? `Captured from ${c.scammer} in a chat with the persona ${p.name}.` : `Captured from ${c.scammer}.`);
+  if (e.first) lines.push(`First seen ${e.first}.`);
+  if (e.stageAt !== undefined && STAGES[e.stageAt]) lines.push(`Sent during the ${STAGES[e.stageAt]} stage.`);
+  else if (c && STAGES[c.stage]) lines.push(`That chat is now at the ${STAGES[c.stage]} stage.`);
+  if (e.scam !== "other") lines.push(`Scam type: ${e.scam}.`);
+  if (e.status === "verified") lines.push(verifiedAt ? `Verified by an operator on ${stamp(new Date(verifiedAt).toISOString())}.` : "Verified by an operator.");
+  if (e.sightings > 0) lines.push(`Seen ${plural(e.sightings, "time")} in scammer chats.`);
+  const quote = src ? (src.text.length > 200 ? src.text.slice(0, 199) + "…" : src.text) : "";
+  if (!lines.length && !quote) return null;
+  return (
+    <div className="why-bank" data-testid="bank-why">
+      <span className="caps muted">Why Sockabus flagged this account</span>
+      <ul>
+        {lines.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
+      {quote && c && (
+        <blockquote>
+          <p>{quote}</p>
+          <small>
+            {c.scammer} · {src!.t}
+          </small>
+        </blockquote>
+      )}
+    </div>
+  );
+}
+
+// What the bank's side can see. Rows with no data are hidden.
+function ClientPanel() {
+  const { data, ui } = useStore();
+  const L = data.lastLookup;
+  const accounts = data.entities.filter((x) => x.type === "bank_account");
+  const verified = accounts.filter((x) => x.status === "verified").length;
+  return (
+    <section className="card panel" aria-label="Client panel" data-testid="bank-client-panel">
+      <div className="panel-h">
+        <h2>Client panel</h2>
+      </div>
+      <dl className="kv">
+        {L && (
+          <div>
+            <dt>Last lookup</dt>
+            <dd>
+              <Badge word={L.result} tone={L.result === "held" ? "danger" : "success"} /> <span className="mono">{L.ms} ms</span>
+            </dd>
+          </div>
+        )}
+        {accounts.length > 0 && (
+          <div>
+            <dt>Verified accounts</dt>
+            <dd>
+              <b>{verified}</b> of {plural(accounts.length, "bank account")}
+            </dd>
+          </div>
+        )}
+        {ui.session.lookups > 0 && (
+          <div>
+            <dt>This demo session</dt>
+            <dd>
+              {plural(ui.session.lookups, "lookup")} · {plural(ui.session.holds, "hold")}
+            </dd>
+          </div>
+        )}
+      </dl>
+      {accounts.length > 0 && (
+        <>
+          <span className="caps muted">Accounts by scam type</span>
+          <ScamBars accounts={accounts} />
+        </>
+      )}
+    </section>
   );
 }

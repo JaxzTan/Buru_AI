@@ -2,7 +2,7 @@
 // to the shapes the screens use (types.ts). Field names follow the Go handlers in
 // internal/server/live.go (there is no api/openapi.yaml yet).
 import { today } from "./format";
-import type { AvatarTone, Confidence, Conversation, Entity, EntityType, LookupResponse, Message, Persona, PersonaStatus, ScamType } from "./types";
+import type { AvatarTone, Confidence, Conversation, Entity, EntityType, LookupResponse, Message, Persona, PersonaDetail, PersonaStatus, ScamType } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -42,6 +42,12 @@ export async function api<T>(path: string, opts: { method?: string; body?: unkno
   } catch {
     // non-JSON body (e.g. a proxy error page)
   }
+  // Session expired or signed out in another tab: the proxy answers 401, so go to the sign-in page.
+  if (res.status === 401 && typeof window !== "undefined" && location.pathname !== "/sign-in") {
+    // Full page load on purpose: drops all in-memory data and lets the proxy check the cookie again.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    location.assign(`/sign-in?next=${encodeURIComponent(location.pathname + location.search)}`);
+  }
   if (!res.ok) throw new ApiError(errorText(json) ?? `Request failed (${res.status})`, res.status);
   return json as T;
 }
@@ -54,10 +60,11 @@ export interface ApiPersona {
   age: number | null;
   language_mix: Record<string, number> | string[] | null;
   backstory: string | null;
-  wealth_profile: { savings_rm?: number; income_bracket?: string; crypto_familiarity?: string } | null;
+  wealth_profile: ({ savings_rm?: number; income_bracket?: string; crypto_familiarity?: string } & Record<string, unknown>) | null;
   status: PersonaStatus;
   created_at: string;
-  profile: { city?: string; state?: string; occupation?: string } | null;
+  updated_at?: string;
+  profile: ({ city?: string; state?: string; occupation?: string } & Record<string, unknown>) | null;
   prompt_version: number;
   scam_types: string[];
 }
@@ -127,7 +134,8 @@ export interface ApiLookupResult {
 const SIM_PREFIX = "sim:"; // internal/channel/sim SessionPrefix: web chat accounts
 export const isSimAccount = (a: ApiAccount) => a.session_ref.startsWith(SIM_PREFIX);
 
-const LANGS: Record<string, string> = { en: "EN", ms: "BM", zh: "Mandarin", nan: "Hokkien", yue: "Cantonese", ta: "Tamil", manglish: "Manglish" };
+const LANGS: Record<string, string> = { en: "EN", ms: "BM", zh: "Mandarin", nan: "Hokkien", yue: "Cantonese", hak: "Hakka", ta: "Tamil", manglish: "Manglish" };
+export const langName = (code: string) => LANGS[code.toLowerCase()] ?? code;
 const TONES: AvatarTone[] = ["mustard", "blue", "green", "neutral"];
 
 // Only ISO timestamps from the API are parsed; anything else (sample data) is shown as is.
@@ -182,13 +190,33 @@ export function toPersona(p: ApiPersona, accounts: ApiAccount[], genIds: string[
     wealth: wealthText(p.wealth_profile),
     av: TONES[p.id % TONES.length],
     gen: genIds.includes(id),
+    detail: personaDetail(p),
+  };
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
+function personaDetail(p: ApiPersona): PersonaDetail {
+  const mix = p.language_mix;
+  const weights = isObj(mix)
+    ? Object.entries(mix)
+        .filter((e): e is [string, number] => typeof e[1] === "number" && e[1] > 0)
+        .sort((a, b) => b[1] - a[1])
+    : null;
+  return {
+    profile: isObj(p.profile) ? p.profile : null,
+    wealth: isObj(p.wealth_profile) ? p.wealth_profile : null,
+    langMix: weights && weights.length ? weights : null,
+    promptVersion: p.prompt_version > 0 ? p.prompt_version : null,
+    scamTypes: p.scam_types ?? [],
+    updated: p.updated_at ?? null,
   };
 }
 
 const STAGE_KEYS = ["rapport", "bait", "payment_request", "stall"];
 
 export function toMessage(m: ApiMessage): Message {
-  return { who: m.sender_type, text: m.text, t: when(m.sent_at) };
+  return { who: m.sender_type, text: m.text, t: when(m.sent_at), at: Date.parse(m.sent_at) || undefined };
 }
 
 export function toConversation(c: ApiConversation, msgs: ApiMessage[] | undefined, accounts: ApiAccount[]): Conversation {
@@ -201,6 +229,7 @@ export function toConversation(c: ApiConversation, msgs: ApiMessage[] | undefine
     status: c.status === "human" ? "operator" : c.status,
     stage: Math.max(0, STAGE_KEYS.indexOf(c.stage)),
     last: when(c.last_message_at ?? c.started_at),
+    lastAt: Date.parse(c.last_message_at ?? c.started_at) || undefined,
     msgs: (msgs ?? []).map(toMessage),
     web: acct ? isSimAccount(acct) : false,
   };
@@ -219,6 +248,7 @@ export function toEntity(e: ApiEntity, source?: { convoId: string; scam: ScamTyp
     conf: e.confidence,
     sightings: e.sightings_count,
     first: stamp(e.first_seen),
+    firstAt: Date.parse(e.first_seen) || undefined,
     convoId: source?.convoId ?? null,
     sample: false,
   };

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { Badge, Chip, Head } from "@/components/ui";
+import { JustVerified } from "@/components/verified";
 import { BANKS, digits, fullVal, plural, showVal, typeLabel } from "@/lib/format";
 import { useQuery } from "@/lib/hooks";
 import { decide, queueOf, useStore } from "@/lib/store";
@@ -18,6 +19,13 @@ const keysHint = (
   </span>
 );
 const SUB = "A human confirms every scam account before any bank sees it.";
+const FORMAT_CHECK: Record<Entity["type"], string> = {
+  bank_account: "Passed the bank-number check (every saved account does)",
+  wallet: "Passed the wallet-address check (every saved wallet does)",
+  phone: "Passed the phone-number check (every saved number does)",
+  url: "Passed the link check (every saved link does)",
+  handle: "Passed the handle check (every saved handle does)",
+};
 
 export function VerifyView() {
   const { data } = useStore();
@@ -54,6 +62,7 @@ export function VerifyView() {
     return (
       <>
         <Head title="Verify queue" sub={SUB} right={keysHint} />
+        <JustVerified />
         <div className="card empty" style={{ padding: 48 }}>
           <b>Queue clear</b>
           <span>Nothing is waiting for a human. New accounts appear here the moment a scammer sends one.</span>
@@ -71,22 +80,24 @@ export function VerifyView() {
 
   const c = e.convoId ? data.convos.find((x) => x.id === e.convoId) : undefined;
   const p = c && data.personas.find((x) => x.id === c.personaId);
-  const src = c ? c.msgs.findIndex((m) => (m.who === "scammer" && digits(m.text).includes(digits(e.value))) || m.text.includes(e.value)) : -1;
+  // Source message: the first one in the chat that contains the value, whoever sent it.
+  const dv = digits(e.value);
+  const src = c ? c.msgs.findIndex((m) => (dv.length >= 6 && digits(m.text).includes(dv)) || m.text.includes(e.value)) : -1;
   const lines = c && src > -1 ? c.msgs.slice(Math.max(0, src - 1), src + 1) : [];
+  const sender = c && src > -1 ? c.msgs[src].who : undefined;
   const late = (e.stageAt ?? 0) >= 2;
-  const stageKnown = e.stageAt !== undefined;
-  const checks: [boolean, string][] = [
-    [true, "Sent by the scammer, not the persona"],
-    stageKnown
-      ? [late, late ? "Sent during the Payment request stage" : "Sent before the Payment request stage — check the context"]
-      : [false, "Stage at capture not reported — check the excerpt"],
-    [true, e.type === "bank_account" ? `Valid length for a ${BANKS[e.bank] ?? e.bank} account number` : e.type === "wallet" ? "Valid TRON address format" : "Valid format"],
-    [e.sightings > 1, e.sightings > 1 ? `Seen in ${e.sightings} conversations` : "Seen in only 1 conversation so far — check the excerpt"],
-  ];
+  // Only lines backed by data: no source message → no sender line; stage unknown → no stage line.
+  const checks: [boolean, string][] = [];
+  if (sender) checks.push(sender === "scammer" ? [true, "Sent by the scammer, not the persona"] : [false, `Sent by the ${sender}, not the scammer — check the excerpt`]);
+  if (e.stageAt !== undefined) checks.push([late, late ? "Sent during the Payment request stage" : "Sent before the Payment request stage — check the context"]);
+  // The backend only saves a value that passes its format check for that type (internal/extraction).
+  checks.push([true, FORMAT_CHECK[e.type]]);
+  checks.push([e.sightings > 1, e.sightings > 1 ? `Seen in ${e.sightings} conversations` : "Seen in only 1 conversation so far — check the excerpt"]);
 
   return (
     <>
       <Head title="Verify queue" sub={SUB} right={keysHint} />
+      <JustVerified />
       <div className="split-v">
         <div className="list">
           <span className="caps muted">{queue.length} pending</span>

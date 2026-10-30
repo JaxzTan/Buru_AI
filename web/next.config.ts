@@ -6,9 +6,6 @@ const nextConfig: NextConfig = {
   output: "standalone", // web/Dockerfile runs .next/standalone/server.js
   cacheComponents: true,
   partialPrefetching: true,
-  redirects() {
-    return [{ source: "/", destination: "/personas", permanent: false }];
-  },
 };
 
 export default nextConfig;

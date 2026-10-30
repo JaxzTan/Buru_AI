@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Shell } from "@/components/Shell";
 import "./globals.css";
 
 // Sockabus type (spec §4.1): Archivo for UI, Archivo Black for display, JetBrains Mono for data.
@@ -38,7 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${archivo.variable} ${archivoBlack.variable} ${jetbrainsMono.variable}`}>
       <body>
-        <Shell>{children}</Shell>
+        {children}
       </body>
     </html>
   );
