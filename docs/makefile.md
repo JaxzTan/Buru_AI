@@ -17,6 +17,7 @@ Shortcuts for local development. Run every target from the repo root.
 
 | Target | What it runs | Use when |
 |---|---|---|
+| `make all` | infra up, `migrate` container, then `--profile app up --build` | Running the whole stack in Docker: all 5 containers (app on `:8080`, web on `:3000`) |
 | `make up` | `docker compose up -d --wait postgres redis temporal` | Starting work: brings up the 3 dependencies and waits until healthy |
 | `make down` | `docker compose down` | Stopping the dependencies. Does not stop `app`/`web` profile containers (see [docker.md](docker.md)) |
 | `make migrate-up` | `migrate -path db/migrations ... up` on `MIGRATE_DB` | After pulling new migrations |
