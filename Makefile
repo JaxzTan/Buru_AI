@@ -16,7 +16,13 @@ GOLANGCI := $(or $(shell command -v golangci-lint-v2),$(shell command -v golangc
 # Full prod stack on the VPS (docker-compose.prod.yml adds Caddy, Uptime Kuma, persistent Temporal)
 PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app
 
-.PHONY: up down deploy prod-ps prod-logs backup restore-test migrate-up migrate-down seed keys tglogin tgchat sim sqlc run web test test-db test-e2e lint
+.PHONY: all up down deploy prod-ps prod-logs backup restore-test migrate-up migrate-down seed keys tglogin tgchat sim sqlc run web test test-db test-e2e lint
+
+all: ## build and start every container: postgres, redis, temporal, migrations, app, web
+	docker compose up -d --wait postgres redis temporal
+	docker compose --profile tools run --rm migrate
+	docker compose --profile app up -d --build --wait --remove-orphans
+	docker compose --profile app ps
 
 up: ## start PostgreSQL, Redis, Temporal
 	docker compose up -d --wait postgres redis temporal

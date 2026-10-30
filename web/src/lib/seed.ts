@@ -34,14 +34,14 @@ export const SEED_CONVOS: Conversation[] = [
 ];
 
 export const SEED_ENTITIES: Entity[] = [
-  { id: "e_870", type: "wallet", bank: "TRON", value: "TQ7vR2pLx9sWm3Ke8dHy4Nc6Bf1Ja1u9xKp", scam: "investment", status: "unverified", conf: "medium", sightings: 3, first: "24 Oct, 07:02", convoId: "c_1027", stageAt: 2, sample: false },
-  { id: "e_866", type: "phone", bank: "", value: "+60 11-2345 6789", scam: "impersonation", status: "unverified", conf: "medium", sightings: 2, first: "27 Oct, 06:15", convoId: null, stageAt: 2, sample: true },
-  { id: "e_861", type: "url", bank: "", value: "poslaju-track.my-parcel.top", scam: "parcel", status: "unverified", conf: "low", sightings: 1, first: "27 Oct, 21:40", convoId: "c_1031", stageAt: 1, sample: true },
-  { id: "e_840", type: "wallet", bank: "TRON", value: "TXa9mK2pQ7rLs4Wd8Hn3Ve6Bc1Yt5Zu3kWq", scam: "investment", status: "verified", conf: "high", sightings: 4, first: "22 Oct, 10:02", convoId: null, sample: true },
-  { id: "e_833", type: "phone", bank: "", value: "+60 12-555 0142", scam: "impersonation", status: "verified", conf: "high", sightings: 6, first: "20 Oct, 21:12", convoId: null, sample: true },
-  { id: "e_828", type: "url", bank: "", value: "jnt-redeliver.parcel-my.top", scam: "parcel", status: "verified", conf: "high", sightings: 3, first: "19 Oct, 18:05", convoId: null, sample: true },
-  { id: "e_820", type: "bank_account", bank: "CIMB", value: "800122334455", scam: "loan", status: "verified", conf: "high", sightings: 2, first: "18 Oct, 10:30", convoId: null, sample: true },
-  { id: "e_811", type: "handle", bank: "", value: "@vip_signal_my", scam: "investment", status: "rejected", conf: "low", sightings: 1, first: "17 Oct, 16:44", convoId: null, sample: true },
+  { id: "e_870", type: "wallet", bank: "TRON", value: "TQ7vR2pLx9sWm3Ke8dHy4Nc6Bf1Ja1u9xKp", scam: "investment", status: "unverified", conf: "medium", sightings: 3, first: "24 Oct, 07:02", firstAt: Date.parse("2026-10-24T07:02"), convoId: "c_1027", stageAt: 2, sample: false },
+  { id: "e_866", type: "phone", bank: "", value: "+60 11-2345 6789", scam: "impersonation", status: "unverified", conf: "medium", sightings: 2, first: "27 Oct, 06:15", firstAt: Date.parse("2026-10-27T06:15"), convoId: null, stageAt: 2, sample: true },
+  { id: "e_861", type: "url", bank: "", value: "poslaju-track.my-parcel.top", scam: "parcel", status: "unverified", conf: "low", sightings: 1, first: "27 Oct, 21:40", firstAt: Date.parse("2026-10-27T21:40"), convoId: "c_1031", stageAt: 1, sample: true },
+  { id: "e_840", type: "wallet", bank: "TRON", value: "TXa9mK2pQ7rLs4Wd8Hn3Ve6Bc1Yt5Zu3kWq", scam: "investment", status: "verified", conf: "high", sightings: 4, first: "22 Oct, 10:02", firstAt: Date.parse("2026-10-22T10:02"), convoId: null, sample: true },
+  { id: "e_833", type: "phone", bank: "", value: "+60 12-555 0142", scam: "impersonation", status: "verified", conf: "high", sightings: 6, first: "20 Oct, 21:12", firstAt: Date.parse("2026-10-20T21:12"), convoId: null, sample: true },
+  { id: "e_828", type: "url", bank: "", value: "jnt-redeliver.parcel-my.top", scam: "parcel", status: "verified", conf: "high", sightings: 3, first: "19 Oct, 18:05", firstAt: Date.parse("2026-10-19T18:05"), convoId: null, sample: true },
+  { id: "e_820", type: "bank_account", bank: "CIMB", value: "800122334455", scam: "loan", status: "verified", conf: "high", sightings: 2, first: "18 Oct, 10:30", firstAt: Date.parse("2026-10-18T10:30"), convoId: null, sample: true },
+  { id: "e_811", type: "handle", bank: "", value: "@vip_signal_my", scam: "investment", status: "rejected", conf: "low", sightings: 1, first: "17 Oct, 16:44", firstAt: Date.parse("2026-10-17T16:44"), convoId: null, sample: true },
 ];
 
 // What "Generate persona" hands out in turn until the real LLM call is wired.

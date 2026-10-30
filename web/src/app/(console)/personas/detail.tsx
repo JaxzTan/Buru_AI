@@ -1,0 +1,175 @@
+"use client";
+// Persona detail (Modify → ?selected=<id>). Read-only: the Go API has no endpoint that edits a
+// persona's profile (only POST /internal/personas/{id}/prompt, which adds a system-prompt version).
+// Every row comes from GET /internal/personas; a row with no data is not shown.
+import { useEffect, useRef, type ReactNode } from "react";
+import { Avatar, Badge, Chip } from "@/components/ui";
+import { langName } from "@/lib/api";
+import { useStore } from "@/lib/store";
+import type { Persona } from "@/lib/types";
+
+type Row = [label: string, value: ReactNode];
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
+// Plain text for a JSON value, or null when there is nothing to show.
+function text(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (typeof v === "number") return Number.isFinite(v) ? v.toLocaleString("en-MY") : null;
+  if (typeof v === "string") return v.trim() || null;
+  if (Array.isArray(v)) {
+    const parts = v.map((x) => (isObj(x) && typeof x.name === "string" ? (x.age != null ? `${x.name} (${x.age})` : x.name) : text(x))).filter(Boolean);
+    return parts.length ? parts.join(", ") : null;
+  }
+  return null; // nested objects are shown by their own rows
+}
+const rm = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? `RM${v.toLocaleString("en-MY")}` : text(v));
+
+function Section({ title, rows }: { title: string; rows: Row[] }) {
+  const shown = rows.filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (!shown.length) return null;
+  return (
+    <section className="pd-sec">
+      <h3 className="caps muted">{title}</h3>
+      <dl className="kv">
+        {shown.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+export function PersonaDetailPanel({ p, onClose }: { p: Persona; onClose: () => void }) {
+  const { data } = useStore();
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: "nearest" });
+    ref.current?.focus({ preventScroll: true });
+  }, [p.id]);
+
+  const d = p.detail;
+  const prof = d?.profile ?? {};
+  const w = d?.wealth;
+  const digital = isObj(prof.digital) ? prof.digital : {};
+  const place = [text(prof.city), text(prof.state)].filter(Boolean).join(", ") || (p.loc !== "—" ? p.loc : null);
+
+  const convos = data.convos.filter((c) => c.personaId === p.id);
+  const live = convos.filter((c) => c.status !== "closed").length;
+  const convoIds = new Set(convos.map((c) => c.id));
+  const captured = data.entities.filter((e) => e.convoId && convoIds.has(e.convoId)).length;
+
+  const identity: Row[] = [
+    ["Full name", p.name],
+    ["Nickname", text(prof.nickname ?? prof.nick_name ?? prof.called)],
+    ["Age", p.age ? String(p.age) : null],
+    ["Gender", text(prof.gender)],
+    ["Ethnicity", text(prof.ethnicity)],
+    ["Religion", text(prof.religion)],
+  ];
+  const lives: Row[] = [
+    ["Place", place],
+    ["Hometown", text(prof.hometown)],
+    ["Housing", text(prof.housing)],
+  ];
+  const background: Row[] = [
+    ["Occupation", text(prof.occupation) ?? (p.occ || null)],
+    ["Education", text(prof.education)],
+    ["Story", p.backstory || null],
+    ["Health", text(prof.health)],
+    ["Daily routine", text(prof.daily_routine ?? prof.routine)],
+    ["Phone", text(digital.phone)],
+    ["Tech literacy", text(digital.tech_literacy)],
+    ["Apps", text(digital.apps)],
+    ["Texting style", text(prof.texting_style)],
+  ];
+  const family: Row[] = [
+    ["Marital status", text(prof.marital_status)],
+    ["Children", text(prof.children)],
+    ["Lives with", text(prof.living_with)],
+    ["Pets", text(prof.pets)],
+  ];
+  const money: Row[] = w
+    ? [
+        ["Income bracket", text(w.income_bracket)],
+        ["Monthly income", rm(w.monthly_income_rm)],
+        ["Savings", rm(w.savings_rm)],
+        ["Banks", text(w.banks)],
+        ["E-wallets", text(w.ewallets)],
+        ["EPF", text(w.epf)],
+        ["ASB", text(w.asb)],
+        ["Property", text(w.property)],
+        ["Debts", text(w.debts)],
+        ["Crypto", text(w.crypto_familiarity)],
+        ["Past losses", text(w.past_losses)],
+      ]
+    : [["Summary", p.wealth || null]];
+  const activity: Row[] = [
+    ["Status", <Badge key="s" word={p.status} />],
+    ["Honeypot", <span key="h" className="mono">{p.handle}</span>],
+    ["Prompt version", d?.promptVersion ? `v${d.promptVersion}` : null],
+    ["Playbooks", d?.scamTypes.length ? d.scamTypes.join(", ") : null],
+    ["Created", p.created || null],
+    ["Chats", convos.length ? `${live} live · ${convos.length} total` : "None yet"],
+    ["Accounts captured", convos.length ? String(captured) : null],
+    ["Last message", convos[0]?.last ?? null],
+  ];
+
+  const mix = d?.langMix;
+  const total = mix ? mix.reduce((a, [, n]) => a + n, 0) : 0;
+
+  return (
+    <section ref={ref} tabIndex={-1} className="card pd" aria-label={`${p.name} details`} data-testid="persona-detail">
+      <div className="pd-h">
+        <Avatar p={p} lg />
+        <div className="txt">
+          <h2>{p.name}</h2>
+          <small className="muted">{[p.age ? String(p.age) : null, p.loc !== "—" ? p.loc : null, p.occ || null].filter(Boolean).join(" · ")}</small>
+        </div>
+        <Badge word={p.status} />
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <div className="pd-grid">
+        <Section title="Identity" rows={identity} />
+        <Section title="Lives in" rows={lives} />
+        <Section title="Background" rows={background} />
+        <Section title="Family" rows={family} />
+        <Section title="Money" rows={money} />
+        {(mix || p.langs.length > 0) && (
+          <section className="pd-sec">
+            <h3 className="caps muted">Languages</h3>
+            {mix ? (
+              <ul className="lbars" aria-label="Language mix">
+                {mix.map(([code, n]) => {
+                  const pct = Math.round((n / total) * 100);
+                  return (
+                    <li key={code}>
+                      <span className="lbl">{langName(code)}</span>
+                      <span className="track">
+                        <span className="bar" style={{ width: `${pct}%` }} />
+                      </span>
+                      <span className="val">{pct}%</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="row-gap">
+                {p.langs.map((l) => (
+                  <Chip key={l}>{l}</Chip>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+        <Section title="Honeypot & activity" rows={activity} />
+      </div>
+    </section>
+  );
+}

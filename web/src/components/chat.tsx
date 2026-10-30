@@ -4,6 +4,7 @@ import { Fragment } from "react";
 import { Badge } from "@/components/ui";
 import { plural, showVal, STAGES, typeLabel } from "@/lib/format";
 import { decide } from "@/lib/store";
+import { bankHref } from "@/components/verified";
 import type { Conversation, Entity, Message } from "@/lib/types";
 
 export function StageBar({ c }: { c: Conversation }) {
@@ -52,9 +53,11 @@ export function EntityCard({ e }: { e: Entity }) {
           </div>
           <p>Banks checking this account now get a match with high confidence.</p>
         </div>
-        <Link className="btn btn-secondary btn-sm" href="/demo/bank">
-          Try it in bank simulator →
-        </Link>
+        {e.type === "bank_account" && (
+          <Link className="btn btn-secondary btn-sm" href={bankHref(e.id)} data-testid="bank-test-link">
+            Test in bank simulator →
+          </Link>
+        )}
       </div>
     );
   if (e.status === "rejected")

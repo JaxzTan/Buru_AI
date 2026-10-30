@@ -51,11 +51,12 @@ export function personaReply(c: Conversation, text: string, hasEntity: boolean):
   return ["sorry ah i not so understand, can explain again?", c.stage];
 }
 
-// Mirrors POST /v1/lookup. Verified → held (high), unverified → check (medium, spec D1), else sent.
+// Mirrors POST /v1/lookup. Two results only (spec D1): match → held, no match → sent.
+// Like the Go API, rejected entities never match, and the confidence is whatever the entity has.
 export function lookup(entities: Entity[], bank: string, acct: string): Omit<Lookup, "bank" | "amt"> {
   const d = digits(acct);
   const e = entities.find((x) => x.type === "bank_account" && x.bank === bank && x.value === d);
   if (!e || e.status === "rejected") return { result: "sent", entityId: null, res: { match: false }, ms: 18 };
-  const res = { match: true, confidence: e.status === "verified" ? ("high" as const) : e.conf, scam_types: [e.scam], first_seen: e.first, sightings: e.sightings };
-  return { result: e.status === "verified" ? "held" : "warn", entityId: e.id, res, ms: 41 };
+  const res = { match: true, confidence: e.conf, scam_types: [e.scam], first_seen: e.first, sightings: e.sightings };
+  return { result: "held", entityId: e.id, res, ms: 41 };
 }

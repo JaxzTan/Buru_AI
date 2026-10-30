@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Avatar, Badge, Chip, Head, Spin } from "@/components/ui";
 import { DEV_CHAT, useQuery } from "@/lib/hooks";
 import { generatePersona, setPersonaStatus, useStore } from "@/lib/store";
+import { PersonaDetailPanel } from "./detail";
 
 const FILTERS = ["all", "active", "draft", "paused"] as const;
 
@@ -17,6 +18,8 @@ export function PersonasView() {
   });
   const list = data.personas.filter((p) => f === "all" || p.status === f);
   const np = newId ? data.personas.find((p) => p.id === newId) : undefined;
+  const selId = q.get("selected");
+  const sel = selId ? data.personas.find((p) => p.id === selId) : undefined;
 
   const generate = async () => {
     const id = await generatePersona();
@@ -39,14 +42,25 @@ export function PersonasView() {
     banner = (
       <div className="banner err" data-testid="persona-generate-error">
         <div className="txt">
-          <h3>Couldn&apos;t generate a persona</h3>
-          <p>The AI model didn&apos;t answer in time. Nothing was saved. Try again — it usually works on the second click.</p>
+          <h3>{ui.genErrorSetup ? "Persona generation isn't set up on the server" : "Couldn't generate a persona"}</h3>
+          <p>
+            {ui.genErrorSetup
+              ? "The backend has no AI model key, so it can't write new personas. Nothing was saved. The existing personas still work for the demo."
+              : `${ui.genError.replace(/\.?$/, ".")} Nothing was saved. Try again — it usually works on the second click.`}
+          </p>
+          {ui.genErrorSetup && (
+            <p className="muted mono" style={{ fontSize: 14 }}>
+              {ui.genError}
+            </p>
+          )}
         </div>
-        <div className="acts">
-          <button className="btn btn-primary" onClick={generate}>
-            Try again
-          </button>
-        </div>
+        {!ui.genErrorSetup && (
+          <div className="acts">
+            <button className="btn btn-primary" onClick={generate}>
+              Try again
+            </button>
+          </div>
+        )}
       </div>
     );
   } else if (np?.status === "draft") {
@@ -106,6 +120,16 @@ export function PersonasView() {
         right={genBtn}
       />
       {banner}
+      {sel && <PersonaDetailPanel p={sel} onClose={() => q.set({ selected: null })} />}
+      {selId && !sel && (
+        <div className="card empty" data-testid="persona-detail">
+          <b>Persona not found</b>
+          <span>It may have been removed. Pick another one from the list.</span>
+          <button className="btn btn-secondary btn-sm" onClick={() => q.set({ selected: null })}>
+            Close
+          </button>
+        </div>
+      )}
       <div className="tabs" role="group" aria-label="Filter by status">
         {FILTERS.map((k) => (
           <button key={k} aria-pressed={f === k} onClick={() => q.set({ status: k })}>
@@ -128,7 +152,7 @@ export function PersonasView() {
           <tbody>
             {list.length ? (
               list.map((p) => (
-                <tr key={p.id} className={p.id === newId && p.status === "draft" ? "hl" : ""} data-testid="persona-row">
+                <tr key={p.id} className={(p.id === newId && p.status === "draft") || p.id === selId ? "hl" : ""} data-testid="persona-row">
                   <td>
                     <div className="namecell">
                       <Avatar p={p} />
@@ -155,6 +179,15 @@ export function PersonasView() {
                   </td>
                   <td className="muted">{p.created}</td>
                   <td className="right">
+                    <div className="row-gap" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
+                    <button
+                      className="btn btn-quiet btn-sm"
+                      onClick={() => q.set({ selected: p.id })}
+                      aria-pressed={p.id === selId}
+                      data-testid="persona-modify-btn"
+                    >
+                      Modify
+                    </button>
                     {p.status === "active" ? (
                       <button className="btn btn-secondary btn-sm" onClick={() => setPersonaStatus(p.id, "paused")} data-testid="persona-pause-btn">
                         Pause
@@ -168,6 +201,7 @@ export function PersonasView() {
                         Activate
                       </button>
                     )}
+                    </div>
                   </td>
                 </tr>
               ))
