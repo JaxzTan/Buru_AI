@@ -1,4 +1,6 @@
 .env
+.secrets/
+backups/
 /bin/
 /out/
 *.session
@@ -50,3 +52,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 node_modules/
+test/
+
+# problem folder
+gallery

@@ -67,7 +67,7 @@ const createPersona = `-- name: CreatePersona :one
 
 INSERT INTO personas (name, age, language_mix, backstory, wealth_profile)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at
+RETURNING id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at, profile, demo_identifiers
 `
 
 type CreatePersonaParams struct {
@@ -98,6 +98,8 @@ func (q *Queries) CreatePersona(ctx context.Context, arg CreatePersonaParams) (P
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Profile,
+		&i.DemoIdentifiers,
 	)
 	return i, err
 }
@@ -185,7 +187,7 @@ func (q *Queries) GetHoneypotAccount(ctx context.Context, id int64) (HoneypotAcc
 }
 
 const getPersona = `-- name: GetPersona :one
-SELECT id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at FROM personas WHERE id = $1
+SELECT id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at, profile, demo_identifiers FROM personas WHERE id = $1
 `
 
 func (q *Queries) GetPersona(ctx context.Context, id int64) (Persona, error) {
@@ -201,6 +203,8 @@ func (q *Queries) GetPersona(ctx context.Context, id int64) (Persona, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Profile,
+		&i.DemoIdentifiers,
 	)
 	return i, err
 }
@@ -329,7 +333,7 @@ func (q *Queries) ListPersonaPlaybooks(ctx context.Context, personaID int64) ([]
 }
 
 const listPersonas = `-- name: ListPersonas :many
-SELECT id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at FROM personas ORDER BY id
+SELECT id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at, profile, demo_identifiers FROM personas ORDER BY id
 `
 
 func (q *Queries) ListPersonas(ctx context.Context) ([]Persona, error) {
@@ -351,6 +355,8 @@ func (q *Queries) ListPersonas(ctx context.Context) ([]Persona, error) {
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Profile,
+			&i.DemoIdentifiers,
 		); err != nil {
 			return nil, err
 		}
@@ -445,7 +451,7 @@ func (q *Queries) SetAccountStatus(ctx context.Context, arg SetAccountStatusPara
 }
 
 const setPersonaStatus = `-- name: SetPersonaStatus :one
-UPDATE personas SET status = $2, updated_at = now() WHERE id = $1 RETURNING id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at
+UPDATE personas SET status = $2, updated_at = now() WHERE id = $1 RETURNING id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at, profile, demo_identifiers
 `
 
 type SetPersonaStatusParams struct {
@@ -466,6 +472,8 @@ func (q *Queries) SetPersonaStatus(ctx context.Context, arg SetPersonaStatusPara
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Profile,
+		&i.DemoIdentifiers,
 	)
 	return i, err
 }
@@ -474,7 +482,7 @@ const updatePersona = `-- name: UpdatePersona :one
 UPDATE personas
 SET name = $2, age = $3, language_mix = $4, backstory = $5, wealth_profile = $6, updated_at = now()
 WHERE id = $1
-RETURNING id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at
+RETURNING id, name, age, language_mix, backstory, wealth_profile, status, created_at, updated_at, profile, demo_identifiers
 `
 
 type UpdatePersonaParams struct {
@@ -506,6 +514,8 @@ func (q *Queries) UpdatePersona(ctx context.Context, arg UpdatePersonaParams) (P
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Profile,
+		&i.DemoIdentifiers,
 	)
 	return i, err
 }

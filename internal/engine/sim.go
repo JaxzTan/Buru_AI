@@ -35,11 +35,11 @@ var scripts = []struct {
 		"Confirm after transfer, call investigator +60 11-3321 5566"}},
 }
 
-// RunSimulator starts a new scripted scammer conversation every BURU_SIM_EVERY seconds (BURU_SIM_MAX total).
+// RunSimulator starts a new scripted scammer conversation every SOCKABUS_SIM_EVERY seconds (SOCKABUS_SIM_MAX total).
 func (e *Engine) RunSimulator(ctx context.Context) {
-	gap, every := secs("BURU_SIM_GAP", 14), secs("BURU_SIM_EVERY", 25)
+	gap, every := secs("SOCKABUS_SIM_GAP", 14), secs("SOCKABUS_SIM_EVERY", 25)
 	max := 6
-	if n, err := strconv.Atoi(os.Getenv("BURU_SIM_MAX")); err == nil {
+	if n, err := strconv.Atoi(os.Getenv("SOCKABUS_SIM_MAX")); err == nil {
 		max = n
 	}
 	personas := e.St.Personas()

@@ -20,7 +20,7 @@ type Client struct {
 }
 
 func FromEnv() *Client {
-	m := os.Getenv("BURU_MODEL")
+	m := os.Getenv("SOCKABUS_MODEL")
 	if m == "" {
 		m = "claude-sonnet-5-5"
 	}

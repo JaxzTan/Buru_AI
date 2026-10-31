@@ -1,29 +1,44 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-// Design system fonts: Plex Sans for UI, Plex Mono for data. Weights 400/500/600 only.
-const plexSans = IBM_Plex_Sans({
-  variable: "--font-plex-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+// Sockabus type (spec §4.1): Archivo for UI, Archivo Black for display, JetBrains Mono for data.
+// Self-hosted (from @fontsource, OFL) so builds don't depend on fetching Google Fonts.
+const archivo = localFont({
+  variable: "--font-archivo",
+  src: [
+    { path: "./fonts/archivo-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/archivo-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/archivo-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/archivo-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
 });
 
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-plex-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const archivoBlack = localFont({
+  variable: "--font-archivo-black",
+  src: "./fonts/archivo-black-latin-400-normal.woff2",
+  weight: "400",
+});
+
+const jetbrainsMono = localFont({
+  variable: "--font-jetbrains-mono",
+  src: [
+    { path: "./fonts/jetbrains-mono-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/jetbrains-mono-latin-500-normal.woff2", weight: "500", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {
-  title: "Buru AI",
+  title: { default: "Sockabus Console", template: "%s · Sockabus" },
   description: "Scam intelligence network for Southeast Asia",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${plexSans.variable} ${plexMono.variable} antialiased`}>
-      <body>{children}</body>
+    <html lang="en" className={`${archivo.variable} ${archivoBlack.variable} ${jetbrainsMono.variable}`}>
+      <body>
+        {children}
+      </body>
     </html>
   );
 }

@@ -1,29 +1,11 @@
 import type { NextConfig } from "next";
 
-// Go API (cmd/buru). Browser calls /api/* and Next proxies them, so no CORS in dev.
-const apiURL = process.env.BURU_API_URL ?? "http://localhost:8080";
-
+// Go API (cmd/sockabus): the browser calls /api/*, and src/app/api/[...path]/route.ts forwards it
+// with the operator token (SOCKABUS_API_URL, SOCKABUS_OPERATOR_TOKEN are read at request time).
 const nextConfig: NextConfig = {
   output: "standalone", // web/Dockerfile runs .next/standalone/server.js
   cacheComponents: true,
   partialPrefetching: true,
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
-  redirects() {
-    return [
-      { source: "/operator", destination: "/operator/overview", permanent: false },
-      { source: "/portal", destination: "/portal/lookup", permanent: false },
-    ];
-  },
-  rewrites() {
-    return [{ source: "/api/:path*", destination: `${apiURL}/:path*` }];
-  },
 };
 
 export default nextConfig;
