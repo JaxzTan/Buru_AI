@@ -39,9 +39,11 @@ services:
     build: .
     env_file: .env
     environment:
-      SOCKABUS_POSTGRES_URL: postgres://buru:${POSTGRES_PASSWORD:-buru}@postgres:5432/buru?sslmode=disable
       SOCKABUS_REDIS_ADDR: redis:6379
       SOCKABUS_TEMPORAL_HOSTPORT: temporal:7233
+      SOCKABUS_TG_SESSION_DIR: /secrets/telegram
+    # Session files from make tglogin (same mount as docker-compose.prod.yml).
+    volumes: [./.secrets/telegram:/secrets/telegram]
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
