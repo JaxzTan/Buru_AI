@@ -137,6 +137,7 @@ type Channel string
 const (
 	ChannelTelegram Channel = "telegram"
 	ChannelWhatsapp Channel = "whatsapp"
+	ChannelWebchat  Channel = "webchat"
 )
 
 func (e *Channel) Scan(src interface{}) error {
@@ -177,7 +178,8 @@ func (ns NullChannel) Value() (driver.Value, error) {
 func (e Channel) Valid() bool {
 	switch e {
 	case ChannelTelegram,
-		ChannelWhatsapp:
+		ChannelWhatsapp,
+		ChannelWebchat:
 		return true
 	}
 	return false
@@ -187,6 +189,7 @@ func AllChannelValues() []Channel {
 	return []Channel{
 		ChannelTelegram,
 		ChannelWhatsapp,
+		ChannelWebchat,
 	}
 }
 
